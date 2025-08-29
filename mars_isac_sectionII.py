@@ -1,48 +1,6 @@
-# ============================================================================
-# Mars ISAC System - Complete Colab Notebook
-# Section III: Fundamental Limits of Environmental Sensing
-# ============================================================================
-
-# %% [markdown]
-# # Mars ISAC System Performance Analysis
-# ## Section III: Fundamental Limits of Environmental Sensing
-# 
-# This notebook implements the theoretical performance bounds analysis from the paper,
-# including CRLB vs ZZB comparison and EFIM degradation factor visualization.
-
-# %% Cell 1: Setup and Clone Repository
-import os
-import sys
-
-# Remove existing clone if present
-!rm -rf /content/ISAC-Mars-Channel-Modellig
-
-# Clone the repository
-!git clone https://github.com/DQY-haofan/ISAC-Mars-Channel-Modellig.git
-
-# Change to project directory
-%cd /content/ISAC-Mars-Channel-Modellig
-
-# For updates in subsequent runs, uncomment:
-# !git pull origin main
-
-print("✅ Repository cloned successfully!")
-
-# %% Cell 2: Install Required Packages
-!pip install numpy scipy matplotlib pandas -q
-print("✅ Required packages installed!")
-
-# %% Cell 3: Create Directory Structure
-!mkdir -p simulations
-!mkdir -p results
-print("✅ Directory structure created!")
-
-# %% Cell 4: Create Performance Bounds Analysis Script
-%%writefile simulations/mars_isac_performance_bounds.py
 """
-Mars ISAC System - CRLB vs. ZZB Performance Threshold Effects
-This script generates a high-quality figure comparing Cramér-Rao Lower Bound (CRLB) 
-and Ziv-Zakai Bound (ZZB) for dust optical depth estimation across different SNR regimes.
+Mars ISAC System - Section III: Fundamental Limits of Environmental Sensing
+Combined analysis script for CRLB vs ZZB bounds and EFIM degradation factor
 """
 
 import numpy as np
@@ -50,6 +8,10 @@ import matplotlib.pyplot as plt
 from scipy.stats import norm
 from scipy.integrate import quad
 from scipy.special import erfc
+from matplotlib.colors import LogNorm
+from matplotlib import cm
+from mpl_toolkits.mplot3d import Axes3D
+import os
 import warnings
 warnings.filterwarnings('ignore')
 
@@ -74,6 +36,18 @@ plt.rcParams.update({
     'savefig.bbox': 'tight',
     'savefig.pad_inches': 0.1
 })
+
+# Create results directory if it doesn't exist
+def ensure_results_dir():
+    """Create results directory if it doesn't exist."""
+    if not os.path.exists('results'):
+        os.makedirs('results')
+        print("Created 'results' directory")
+    return 'results'
+
+# ============================================================================
+# Part 1: CRLB vs ZZB Analysis
+# ============================================================================
 
 class MarsISACBounds:
     """Class for computing theoretical performance bounds for Mars ISAC systems."""
@@ -108,39 +82,22 @@ class MarsISACBounds:
         self.A_tau = 2.0  # Typical range [0, 2] for Mars dust optical depth
         
     def calculate_crlb(self, snr_db):
-        """
-        Calculate the Cramér-Rao Lower Bound for dust optical depth estimation.
-        
-        Args:
-            snr_db: Signal-to-noise ratio in dB
-            
-        Returns:
-            CRLB value (mean squared error)
-        """
+        """Calculate the Cramér-Rao Lower Bound for dust optical depth estimation."""
         snr_linear = 10**(snr_db / 10)
         
-        # Fisher information for τ_vis (Eq. eq:fim_tau_vis_corrected)
+        # Fisher information for τ_vis
         J_tau = (self.d * self.dalpha_dtau)**2 * self.N_eff * snr_linear / (1 + snr_linear)**2
         
-        # CRLB (Eq. eq:crlb_tau_vis_corrected)
+        # CRLB
         crlb = 1 / J_tau if J_tau > 0 else np.inf
         
         return crlb
     
     def calculate_pe(self, h, snr_db):
-        """
-        Calculate the probability of error for binary hypothesis testing.
-        
-        Args:
-            h: Hypothesis separation for τ_vis
-            snr_db: Signal-to-noise ratio in dB
-            
-        Returns:
-            Probability of error
-        """
+        """Calculate the probability of error for binary hypothesis testing."""
         snr_linear = 10**(snr_db / 10)
         
-        # Argument for Q-function (Eq. eq:pe_tau_corrected)
+        # Argument for Q-function
         arg = np.sqrt(self.N_eff * snr_linear * (h * self.d * self.dalpha_dtau)**2 / 
                       (2 * (1 + snr_linear)))
         
@@ -150,15 +107,7 @@ class MarsISACBounds:
         return Pe
     
     def valley_function(self, Pe):
-        """
-        Valley function V(Pe) for ZZB computation.
-        
-        Args:
-            Pe: Probability of error
-            
-        Returns:
-            Valley function value
-        """
+        """Valley function V(Pe) for ZZB computation."""
         if Pe < 1e-10:
             return 0
         elif Pe > 0.5 - 1e-10:
@@ -168,15 +117,7 @@ class MarsISACBounds:
             return 2 * Pe * (1 - 2*Pe)
     
     def calculate_zzb(self, snr_db):
-        """
-        Calculate the Ziv-Zakai Bound using numerical integration.
-        
-        Args:
-            snr_db: Signal-to-noise ratio in dB
-            
-        Returns:
-            ZZB value (mean squared error)
-        """
+        """Calculate the Ziv-Zakai Bound using numerical integration."""
         def integrand(h):
             Pe = self.calculate_pe(h, snr_db)
             V = self.valley_function(Pe)
@@ -185,21 +126,13 @@ class MarsISACBounds:
         # Numerical integration over [0, 2A]
         result, _ = quad(integrand, 0, 2*self.A_tau, limit=100)
         
-        # ZZB formula (Eq. eq:zzb_general)
+        # ZZB formula
         zzb = result / (2 * self.A_tau)
         
         return zzb
     
     def calculate_bcrlb(self, snr_db):
-        """
-        Calculate the Bayesian CRLB with uniform prior.
-        
-        Args:
-            snr_db: Signal-to-noise ratio in dB
-            
-        Returns:
-            BCRLB value (mean squared error)
-        """
+        """Calculate the Bayesian CRLB with uniform prior."""
         snr_linear = 10**(snr_db / 10)
         
         # Fisher information
@@ -208,13 +141,107 @@ class MarsISACBounds:
         # Prior variance for uniform distribution
         sigma_p2 = self.A_tau**2 / 3
         
-        # BCRLB (Eq. eq:bcrlb)
+        # BCRLB
         bcrlb = 1 / (J_tau + 1/sigma_p2)
         
         return bcrlb
 
-def plot_bounds_comparison():
+# ============================================================================
+# Part 2: EFIM Analysis
+# ============================================================================
+
+class EFIMAnalysis:
+    """Class for analyzing Effective Fisher Information Matrix degradation."""
+    
+    def __init__(self, B=10e6, T=1e-3, d=500e3, snr_db=20):
+        """Initialize system parameters for EFIM analysis."""
+        self.B = B
+        self.T = T
+        self.d = d
+        self.snr_linear = 10**(snr_db / 10)
+        
+        # Mars atmospheric parameters
+        self.H_dust = 11e3  # Dust scale height [m]
+        self.beta_ext = 0.012  # Mass extinction efficiency [m²/g]
+        self.dalpha_dtau = self.beta_ext / self.H_dust
+        
+        # Correlation penalty factor
+        self.kappa = 1.2
+        self.N_eff = B * T / self.kappa
+        
+        # Spectrum shape factor for timing coupling
+        self.gamma = 1/3  # For rectangular spectrum
+        
+    def calculate_fim_elements(self):
+        """Calculate the Fisher Information Matrix elements."""
+        snr = self.snr_linear
+        
+        # Environmental parameter FIM (τ_vis)
+        J_tau_tau = (self.d * self.dalpha_dtau)**2 * self.N_eff * snr / (1 + snr)**2
+        
+        # Nuisance parameter FIM elements
+        J_phi_phi = self.N_eff * snr / (1 + snr)
+        J_epsilon_epsilon = (2 * np.pi * self.B)**2 * self.gamma * self.N_eff * snr / (1 + snr)
+        J_deltaf_deltaf = (2 * np.pi * self.T)**2 * self.N_eff * snr / (3 * (1 + snr))
+        
+        return {
+            'J_tau_tau': J_tau_tau,
+            'J_phi_phi': J_phi_phi,
+            'J_epsilon_epsilon': J_epsilon_epsilon,
+            'J_deltaf_deltaf': J_deltaf_deltaf
+        }
+    
+    def calculate_coupling_terms(self):
+        """Calculate the coupling terms between environmental and nuisance parameters."""
+        snr = self.snr_linear
+        
+        # Coupling terms
+        J_tau_phi = np.sqrt(self.N_eff * snr / (1 + snr)) * self.d * self.dalpha_dtau * 0.1
+        J_tau_epsilon = (self.N_eff * snr / (1 + snr)) * self.d * self.dalpha_dtau * self.B * self.gamma
+        J_tau_deltaf = 0  # Orthogonal with proper pilot design
+        
+        return {
+            'J_tau_phi': J_tau_phi,
+            'J_tau_epsilon': J_tau_epsilon,
+            'J_tau_deltaf': J_tau_deltaf
+        }
+    
+    def calculate_eta(self, phi_std, epsilon_std, deltaf_std=None):
+        """Calculate the performance degradation factor η."""
+        # Get FIM elements
+        fim = self.calculate_fim_elements()
+        coupling = self.calculate_coupling_terms()
+        
+        # Account for uncertainty in nuisance parameters
+        J_phi_effective = fim['J_phi_phi'] / (1 + fim['J_phi_phi'] * phi_std**2)
+        J_epsilon_effective = fim['J_epsilon_epsilon'] / (1 + fim['J_epsilon_epsilon'] * epsilon_std**2)
+        
+        # Calculate degradation factor
+        eta = 1.0
+        
+        # Phase noise contribution
+        if J_phi_effective > 0:
+            eta += coupling['J_tau_phi']**2 / (fim['J_tau_tau'] * J_phi_effective)
+        
+        # Timing jitter contribution  
+        if J_epsilon_effective > 0:
+            eta += coupling['J_tau_epsilon']**2 / (fim['J_tau_tau'] * J_epsilon_effective)
+        
+        # Frequency offset contribution (if provided)
+        if deltaf_std is not None:
+            J_deltaf_effective = fim['J_deltaf_deltaf'] / (1 + fim['J_deltaf_deltaf'] * deltaf_std**2)
+            if J_deltaf_effective > 0:
+                eta += coupling['J_tau_deltaf']**2 / (fim['J_tau_tau'] * J_deltaf_effective)
+        
+        return eta
+
+# ============================================================================
+# Plotting Functions
+# ============================================================================
+
+def plot_bounds_comparison(save_dir):
     """Generate the main CRLB vs ZZB comparison plot."""
+    print("Generating CRLB vs ZZB comparison plot...")
     
     # Initialize Mars ISAC system
     mars_isac = MarsISACBounds()
@@ -227,7 +254,7 @@ def plot_bounds_comparison():
     zzb_values = np.array([mars_isac.calculate_zzb(snr) for snr in snr_db_range])
     bcrlb_values = np.array([mars_isac.calculate_bcrlb(snr) for snr in snr_db_range])
     
-    # Find threshold SNR (where ZZB ≈ 2×CRLB)
+    # Find threshold SNR
     ratio = zzb_values / (crlb_values + 1e-10)
     threshold_idx = np.where(ratio < 2)[0]
     if len(threshold_idx) > 0:
@@ -254,12 +281,13 @@ def plot_bounds_comparison():
     ax.text(25, 1e-6, 'Asymptotic\nRegion', fontsize=10, ha='center',
             bbox=dict(boxstyle='round,pad=0.3', facecolor='lightgreen', alpha=0.3))
     
-    # Add arrow annotation for threshold effect
-    ax.annotate('Threshold Effect\n(CRLB breaks down)',
-                xy=(snr_threshold, zzb_values[threshold_idx[0]] if len(threshold_idx) > 0 else 1e-3),
-                xytext=(snr_threshold-8, 1e-1),
-                arrowprops=dict(arrowstyle='->', color='red', lw=1.5),
-                fontsize=9, color='red')
+    # Add arrow annotation
+    if len(threshold_idx) > 0:
+        ax.annotate('Threshold Effect\n(CRLB breaks down)',
+                    xy=(snr_threshold, zzb_values[threshold_idx[0]]),
+                    xytext=(snr_threshold-8, 1e-1),
+                    arrowprops=dict(arrowstyle='->', color='red', lw=1.5),
+                    fontsize=9, color='red')
     
     # Labels and formatting
     ax.set_xlabel('Signal-to-Noise Ratio (SNR$_{rx}$) [dB]', fontsize=12)
@@ -280,202 +308,29 @@ def plot_bounds_comparison():
     ax.text(0.02, 0.02, param_text, transform=ax.transAxes, fontsize=9,
             bbox=dict(boxstyle='round', facecolor='wheat', alpha=0.8))
     
-    plt.tight_layout()
+    # Save figure
+    fig.savefig(os.path.join(save_dir, 'fig3_1_zzb_vs_crlb.pdf'), format='pdf', dpi=300)
+    fig.savefig(os.path.join(save_dir, 'fig3_1_zzb_vs_crlb.png'), format='png', dpi=300)
+    plt.close(fig)
+    
+    print(f"  Saved: {save_dir}/fig3_1_zzb_vs_crlb.pdf/png")
     return fig
 
-# Generate and save the figure
-if __name__ == "__main__":
-    # Create results directory if it doesn't exist
-    import os
-    os.makedirs('results', exist_ok=True)
-    
-    fig = plot_bounds_comparison()
-    
-    # Save in multiple formats
-    fig.savefig('results/zzb_vs_crlb.pdf', format='pdf', dpi=300)
-    fig.savefig('results/zzb_vs_crlb.png', format='png', dpi=300)
-    
-    plt.show()
-    
-    print("Figure generated successfully!")
-    print("Files saved in results/ directory: zzb_vs_crlb.pdf and zzb_vs_crlb.png")
-
-# %% Cell 5: Create EFIM Analysis Script
-%%writefile simulations/mars_isac_efim_analysis.py
-"""
-Mars ISAC System - EFIM Performance Degradation Factor Heatmap
-This script generates a high-quality heatmap showing how receiver imperfections
-(phase noise and timing jitter) degrade environmental sensing performance.
-"""
-
-import numpy as np
-import matplotlib.pyplot as plt
-from matplotlib.colors import LogNorm
-from matplotlib import cm
-import warnings
-warnings.filterwarnings('ignore')
-
-# Configure matplotlib for IEEE publication quality
-plt.rcParams.update({
-    'font.size': 11,
-    'font.family': 'serif',
-    'font.serif': ['Times New Roman'],
-    'axes.labelsize': 11,
-    'axes.titlesize': 12,
-    'legend.fontsize': 10,
-    'xtick.labelsize': 10,
-    'ytick.labelsize': 10,
-    'figure.figsize': (8, 6),
-    'figure.dpi': 300,
-    'lines.linewidth': 1.5,
-    'lines.markersize': 6,
-    'axes.grid': False,  # No grid for heatmaps
-    'savefig.dpi': 300,
-    'savefig.bbox': 'tight',
-    'savefig.pad_inches': 0.1
-})
-
-class EFIMAnalysis:
-    """Class for analyzing Effective Fisher Information Matrix degradation."""
-    
-    def __init__(self, B=10e6, T=1e-3, d=500e3, snr_db=20):
-        """
-        Initialize system parameters for EFIM analysis.
-        
-        Args:
-            B: Bandwidth [Hz]
-            T: Observation time [s]
-            d: Propagation distance [m]
-            snr_db: Operating SNR [dB]
-        """
-        self.B = B
-        self.T = T
-        self.d = d
-        self.snr_linear = 10**(snr_db / 10)
-        
-        # Mars atmospheric parameters
-        self.H_dust = 11e3  # Dust scale height [m]
-        self.beta_ext = 0.012  # Mass extinction efficiency [m²/g]
-        self.dalpha_dtau = self.beta_ext / self.H_dust
-        
-        # Correlation penalty factor
-        self.kappa = 1.2
-        self.N_eff = B * T / self.kappa
-        
-        # Spectrum shape factor for timing coupling
-        self.gamma = 1/3  # For rectangular spectrum
-        
-    def calculate_fim_elements(self):
-        """
-        Calculate the Fisher Information Matrix elements.
-        
-        Returns:
-            Dictionary containing FIM elements
-        """
-        snr = self.snr_linear
-        
-        # Environmental parameter FIM (τ_vis)
-        J_tau_tau = (self.d * self.dalpha_dtau)**2 * self.N_eff * snr / (1 + snr)**2
-        
-        # Nuisance parameter FIM elements
-        # Phase offset Fisher information
-        J_phi_phi = self.N_eff * snr / (1 + snr)
-        
-        # Timing offset Fisher information  
-        J_epsilon_epsilon = (2 * np.pi * self.B)**2 * self.gamma * self.N_eff * snr / (1 + snr)
-        
-        # Frequency offset Fisher information
-        J_deltaf_deltaf = (2 * np.pi * self.T)**2 * self.N_eff * snr / (3 * (1 + snr))
-        
-        return {
-            'J_tau_tau': J_tau_tau,
-            'J_phi_phi': J_phi_phi,
-            'J_epsilon_epsilon': J_epsilon_epsilon,
-            'J_deltaf_deltaf': J_deltaf_deltaf
-        }
-    
-    def calculate_coupling_terms(self):
-        """
-        Calculate the coupling terms between environmental and nuisance parameters.
-        
-        Returns:
-            Dictionary containing coupling terms
-        """
-        snr = self.snr_linear
-        
-        # Coupling between τ_vis and phase offset
-        # Phase variations affect power measurements
-        J_tau_phi = np.sqrt(self.N_eff * snr / (1 + snr)) * self.d * self.dalpha_dtau * 0.1
-        
-        # Coupling between τ_vis and timing offset (Eq. eq:coupling_timing_corrected)
-        J_tau_epsilon = (self.N_eff * snr / (1 + snr)) * self.d * self.dalpha_dtau * self.B * self.gamma
-        
-        # Coupling between τ_vis and frequency offset
-        J_tau_deltaf = 0  # Orthogonal with proper pilot design
-        
-        return {
-            'J_tau_phi': J_tau_phi,
-            'J_tau_epsilon': J_tau_epsilon,
-            'J_tau_deltaf': J_tau_deltaf
-        }
-    
-    def calculate_eta(self, phi_std, epsilon_std, deltaf_std=None):
-        """
-        Calculate the performance degradation factor η.
-        
-        Args:
-            phi_std: Phase noise standard deviation [rad]
-            epsilon_std: Timing jitter standard deviation [s]
-            deltaf_std: Frequency offset standard deviation [Hz] (optional)
-            
-        Returns:
-            Performance degradation factor η
-        """
-        # Get FIM elements
-        fim = self.calculate_fim_elements()
-        coupling = self.calculate_coupling_terms()
-        
-        # Account for uncertainty in nuisance parameters
-        # The FIM for nuisance parameters is reduced by their uncertainty
-        J_phi_effective = fim['J_phi_phi'] / (1 + fim['J_phi_phi'] * phi_std**2)
-        J_epsilon_effective = fim['J_epsilon_epsilon'] / (1 + fim['J_epsilon_epsilon'] * epsilon_std**2)
-        
-        # Calculate degradation factor (Eq. eq:degradation_factor_final)
-        eta = 1.0
-        
-        # Phase noise contribution
-        if J_phi_effective > 0:
-            eta += coupling['J_tau_phi']**2 / (fim['J_tau_tau'] * J_phi_effective)
-        
-        # Timing jitter contribution  
-        if J_epsilon_effective > 0:
-            eta += coupling['J_tau_epsilon']**2 / (fim['J_tau_tau'] * J_epsilon_effective)
-        
-        # Frequency offset contribution (if provided)
-        if deltaf_std is not None:
-            J_deltaf_effective = fim['J_deltaf_deltaf'] / (1 + fim['J_deltaf_deltaf'] * deltaf_std**2)
-            if J_deltaf_effective > 0:
-                eta += coupling['J_tau_deltaf']**2 / (fim['J_tau_tau'] * J_deltaf_effective)
-        
-        return eta
-
-def generate_efim_heatmap():
+def generate_efim_heatmap(save_dir):
     """Generate the EFIM performance degradation heatmap."""
+    print("Generating EFIM degradation heatmap...")
     
-    # Initialize EFIM analysis with typical Mars link parameters
+    # Initialize EFIM analysis
     efim = EFIMAnalysis(B=10e6, T=1e-3, d=500e3, snr_db=20)
     
     # Define parameter ranges
-    # Phase noise standard deviation [rad]
     phi_std_range = np.logspace(-3, 0, 50)  # 0.001 to 1 rad
-    
-    # Timing jitter standard deviation [s]
     epsilon_std_range = np.logspace(-9, -6, 50)  # 1 ns to 1 μs
     
     # Create meshgrid
     PHI, EPSILON = np.meshgrid(phi_std_range, epsilon_std_range)
     
-    # Calculate degradation factor for each combination
+    # Calculate degradation factor
     ETA = np.zeros_like(PHI)
     for i in range(len(epsilon_std_range)):
         for j in range(len(phi_std_range)):
@@ -487,13 +342,17 @@ def generate_efim_heatmap():
     # Subplot 1: Main heatmap
     ax1 = fig.add_subplot(121)
     
-    # Create heatmap with logarithmic color scale
+    # Temporarily disable grid for heatmap
+    original_grid = plt.rcParams['axes.grid']
+    plt.rcParams['axes.grid'] = False
+    
+    # Create heatmap
     im = ax1.pcolormesh(EPSILON * 1e9, PHI, ETA, 
                         cmap='plasma', 
                         shading='auto',
                         norm=LogNorm(vmin=1.0, vmax=10.0))
     
-    # Add contour lines for specific degradation levels
+    # Add contour lines
     contour_levels = [1.1, 1.5, 2.0, 3.0, 5.0]
     CS = ax1.contour(EPSILON * 1e9, PHI, ETA, 
                      levels=contour_levels, 
@@ -514,9 +373,8 @@ def generate_efim_heatmap():
     
     # Add colorbar
     cbar = plt.colorbar(im, ax=ax1, label='Degradation Factor $\\eta$')
-    cbar.ax.set_ylabel('Degradation Factor $\\eta$', fontsize=11)
     
-    # Add annotations for operational regions
+    # Add annotations
     ax1.text(100, 0.002, 'Excellent\n(η < 1.1)', fontsize=9, color='white',
             bbox=dict(boxstyle='round', facecolor='green', alpha=0.7))
     ax1.text(500, 0.01, 'Acceptable\n(η < 2)', fontsize=9, color='white',
@@ -524,10 +382,13 @@ def generate_efim_heatmap():
     ax1.text(800, 0.3, 'Poor\n(η > 3)', fontsize=9, color='white',
             bbox=dict(boxstyle='round', facecolor='red', alpha=0.7))
     
+    # Restore grid setting
+    plt.rcParams['axes.grid'] = original_grid
+    
     # Subplot 2: Cross-sections
     ax2 = fig.add_subplot(122)
     
-    # Plot cross-sections at fixed phase noise levels
+    # Plot cross-sections
     phase_levels = [0.001, 0.01, 0.1]
     colors = ['blue', 'green', 'red']
     
@@ -562,15 +423,23 @@ def generate_efim_heatmap():
             bbox=dict(boxstyle='round', facecolor='wheat', alpha=0.8))
     
     plt.tight_layout()
+    
+    # Save figure
+    fig.savefig(os.path.join(save_dir, 'fig3_2_efim_degradation.pdf'), format='pdf', dpi=300)
+    fig.savefig(os.path.join(save_dir, 'fig3_2_efim_degradation.png'), format='png', dpi=300)
+    plt.close(fig)
+    
+    print(f"  Saved: {save_dir}/fig3_2_efim_degradation.pdf/png")
     return fig
 
-def generate_3d_surface():
+def generate_3d_surface(save_dir):
     """Generate a 3D surface plot of the degradation factor."""
+    print("Generating 3D surface plot...")
     
     # Initialize EFIM analysis
     efim = EFIMAnalysis(B=10e6, T=1e-3, d=500e3, snr_db=20)
     
-    # Define parameter ranges (coarser for 3D visualization)
+    # Define parameter ranges
     phi_std_range = np.logspace(-3, 0, 30)
     epsilon_std_range = np.logspace(-9, -6, 30)
     
@@ -608,103 +477,118 @@ def generate_3d_surface():
     ax.view_init(elev=25, azim=45)
     
     plt.tight_layout()
+    
+    # Save figure
+    fig.savefig(os.path.join(save_dir, 'fig3_3_efim_3d.pdf'), format='pdf', dpi=300)
+    fig.savefig(os.path.join(save_dir, 'fig3_3_efim_3d.png'), format='png', dpi=300)
+    plt.close(fig)
+    
+    print(f"  Saved: {save_dir}/fig3_3_efim_3d.pdf/png")
     return fig
 
-# Generate and save figures
+def generate_summary_statistics(save_dir):
+    """Generate and save summary statistics for Section III."""
+    print("\nGenerating summary statistics...")
+    
+    # Initialize systems
+    mars_isac = MarsISACBounds()
+    efim = EFIMAnalysis()
+    
+    # Calculate key metrics
+    stats = {
+        'System Parameters': {
+            'Bandwidth': f'{mars_isac.B/1e6:.1f} MHz',
+            'Observation Time': f'{mars_isac.T*1e3:.1f} ms',
+            'Link Distance': f'{mars_isac.d/1e3:.0f} km',
+            'Dust Scale Height': f'{mars_isac.H_dust/1e3:.1f} km',
+            'Extinction Coefficient': f'{mars_isac.beta_ext:.3f} m²/g',
+            'Effective Samples': f'{mars_isac.N_eff:.0f}',
+        },
+        'Performance Bounds at SNR=20dB': {
+            'CRLB(τ_vis)': f'{mars_isac.calculate_crlb(20):.2e}',
+            'ZZB(τ_vis)': f'{mars_isac.calculate_zzb(20):.2e}',
+            'BCRLB(τ_vis)': f'{mars_isac.calculate_bcrlb(20):.2e}',
+        },
+        'EFIM Degradation (typical)': {
+            'Phase noise (0.01 rad)': f'{efim.calculate_eta(0.01, 1e-7):.2f}',
+            'Timing jitter (100 ns)': f'{efim.calculate_eta(0.001, 1e-7):.2f}',
+            'Combined effect': f'{efim.calculate_eta(0.01, 1e-7):.2f}',
+        }
+    }
+    
+    # Save to text file
+    stats_file = os.path.join(save_dir, 'section3_summary_statistics.txt')
+    with open(stats_file, 'w') as f:
+        f.write("=" * 60 + "\n")
+        f.write("MARS ISAC SYSTEM - SECTION III SUMMARY STATISTICS\n")
+        f.write("Fundamental Limits of Environmental Sensing\n")
+        f.write("=" * 60 + "\n\n")
+        
+        for category, metrics in stats.items():
+            f.write(f"{category}:\n")
+            f.write("-" * 40 + "\n")
+            for key, value in metrics.items():
+                f.write(f"  {key:30s}: {value}\n")
+            f.write("\n")
+    
+    print(f"  Saved: {save_dir}/section3_summary_statistics.txt")
+    
+    # Also print to console
+    print("\n" + "=" * 60)
+    print("SUMMARY STATISTICS")
+    print("=" * 60)
+    for category, metrics in stats.items():
+        print(f"\n{category}:")
+        for key, value in metrics.items():
+            print(f"  {key:30s}: {value}")
+    
+    return stats
+
+# ============================================================================
+# Main Execution
+# ============================================================================
+
+def main():
+    """Main execution function."""
+    print("\n" + "=" * 60)
+    print("MARS ISAC SYSTEM - SECTION III ANALYSIS")
+    print("Fundamental Limits of Environmental Sensing")
+    print("=" * 60 + "\n")
+    
+    # Ensure results directory exists
+    save_dir = ensure_results_dir()
+    
+    # Generate all figures
+    print("\nGenerating figures...")
+    print("-" * 40)
+    
+    # Figure 1: CRLB vs ZZB comparison
+    fig1 = plot_bounds_comparison(save_dir)
+    
+    # Figure 2: EFIM degradation heatmap
+    fig2 = generate_efim_heatmap(save_dir)
+    
+    # Figure 3: 3D surface plot
+    fig3 = generate_3d_surface(save_dir)
+    
+    # Generate summary statistics
+    stats = generate_summary_statistics(save_dir)
+    
+    print("\n" + "=" * 60)
+    print("ANALYSIS COMPLETE!")
+    print(f"All results saved in: {os.path.abspath(save_dir)}/")
+    print("=" * 60 + "\n")
+    
+    return save_dir
+
 if __name__ == "__main__":
-    # Create results directory if it doesn't exist
-    import os
-    os.makedirs('results', exist_ok=True)
+    # Run main analysis
+    results_dir = main()
     
-    # Generate main heatmap
-    fig1 = generate_efim_heatmap()
-    fig1.savefig('results/efim_degradation_heatmap.pdf', format='pdf', dpi=300)
-    fig1.savefig('results/efim_degradation_heatmap.png', format='png', dpi=300)
-    
-    # Generate 3D surface plot
-    fig2 = generate_3d_surface()
-    fig2.savefig('results/efim_degradation_3d.pdf', format='pdf', dpi=300)
-    fig2.savefig('results/efim_degradation_3d.png', format='png', dpi=300)
-    
-    plt.show()
-    
-    print("Figures generated successfully!")
-    print("Files saved in results/ directory:")
-    print("  - efim_degradation_heatmap.pdf/png")
-    print("  - efim_degradation_3d.pdf/png")
-
-# %% Cell 6: Run Performance Bounds Analysis
-!python simulations/mars_isac_performance_bounds.py
-
-# %% Cell 7: Run EFIM Analysis
-!python simulations/mars_isac_efim_analysis.py
-
-# %% Cell 8: Display Generated Figures
-from IPython.display import Image, display
-import matplotlib.pyplot as plt
-import matplotlib.image as mpimg
-
-# Display all generated figures
-print("=" * 60)
-print("GENERATED FIGURES")
-print("=" * 60)
-
-# Display CRLB vs ZZB figure
-print("\n📊 Figure 1: Performance Bounds Comparison")
-img1 = mpimg.imread('results/zzb_vs_crlb.png')
-plt.figure(figsize=(10, 8))
-plt.imshow(img1)
-plt.axis('off')
-plt.title('CRLB vs ZZB: Threshold Effects in Mars Dust Sensing')
-plt.show()
-
-# Display EFIM heatmap
-print("\n🗺️ Figure 2: EFIM Performance Degradation Heatmap")
-img2 = mpimg.imread('results/efim_degradation_heatmap.png')
-plt.figure(figsize=(14, 6))
-plt.imshow(img2)
-plt.axis('off')
-plt.title('Impact of Receiver Imperfections on Sensing Accuracy')
-plt.show()
-
-# Display 3D surface
-print("\n🏔️ Figure 3: 3D Degradation Surface")
-img3 = mpimg.imread('results/efim_degradation_3d.png')
-plt.figure(figsize=(10, 8))
-plt.imshow(img3)
-plt.axis('off')
-plt.title('3D Visualization of Performance Degradation')
-plt.show()
-
-# %% Cell 9: Check Generated Files
-print("\n" + "=" * 60)
-print("GENERATED FILES")
-print("=" * 60)
-!ls -la results/
-
-# %% Cell 10: Create Archive for Download
-!zip -r mars_isac_simulation_results.zip results/
-from google.colab import files
-print("\n📦 Downloading simulation results...")
-files.download('mars_isac_simulation_results.zip')
-
-# %% Cell 11: Summary and Next Steps
-print("\n" + "=" * 60)
-print("SIMULATION COMPLETE!")
-print("=" * 60)
-print("\n✅ All simulations completed successfully!")
-print("\n📁 Generated files:")
-print("  • results/zzb_vs_crlb.pdf - Performance bounds comparison (PDF)")
-print("  • results/zzb_vs_crlb.png - Performance bounds comparison (PNG)")
-print("  • results/efim_degradation_heatmap.pdf - EFIM degradation heatmap (PDF)")
-print("  • results/efim_degradation_heatmap.png - EFIM degradation heatmap (PNG)")
-print("  • results/efim_degradation_3d.pdf - 3D degradation surface (PDF)")
-print("  • results/efim_degradation_3d.png - 3D degradation surface (PNG)")
-print("\n📊 Key findings:")
-print("  • Threshold SNR ≈ 8-10 dB for reliable dust sensing")
-print("  • Phase noise < 0.01 rad and timing jitter < 100 ns for η < 1.5")
-print("  • Effective sample count N_eff critical for lowering threshold")
-print("\n🔄 To re-run with updated parameters:")
-print("  1. Edit the scripts in simulations/ folder")
-print("  2. Re-run cells 6 and 7")
-print("  3. View updated results in cell 8")
+    # Display completion message
+    print("Files generated:")
+    print("  1. fig3_1_zzb_vs_crlb.pdf/png - Performance bounds comparison")
+    print("  2. fig3_2_efim_degradation.pdf/png - EFIM degradation heatmap")
+    print("  3. fig3_3_efim_3d.pdf/png - 3D surface visualization")
+    print("  4. section3_summary_statistics.txt - Key metrics summary")
+    print("\nAnalysis timestamp:", np.datetime64('now'))
