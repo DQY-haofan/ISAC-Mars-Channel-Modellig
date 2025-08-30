@@ -216,13 +216,13 @@ def plot_bounds_comparison(params_dict, save_dir='results', subplot_label=''):
     
     # Simplified title with subplot label
     title = f'B={B/1e6:.1f} MHz, T={T*1e3:.1f} ms, d={d/1e3:.0f} km'
-    ax.set_title(title, fontsize=20, fontweight='bold', pad=15)
+    ax.set_title(title, fontsize=24, fontweight='bold', pad=15)
     
     # Labels
-    ax.set_xlabel('SNR [dB]', fontsize=20)
-    ax.set_ylabel('MSE for $\\tau_{vis}$', fontsize=20)
+    ax.set_xlabel('SNR [dB]', fontsize=24)
+    ax.set_ylabel('MSE for $\\tau_{vis}$', fontsize=24)
     ax.grid(True, which='both', linestyle=':', alpha=0.3)
-    ax.legend(loc='best', fontsize=20, frameon=True, shadow=True)
+    ax.legend(loc='best', fontsize=22, frameon=True, shadow=True)
     ax.set_xlim([snr_min, snr_max])
     ax.set_ylim([1e-8, 1e2])
     
