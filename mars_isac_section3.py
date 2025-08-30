@@ -48,7 +48,7 @@ class MarsISACBounds:
     Implements correct Fisher Information scaling and ZZB computation.
     """
     
-    def __init__(self, B=10e6, T=1e-3, d=500e3, H_dust=11e3):
+    def __init__(self, B=100e3, T=1e-3, d=50e3, H_dust=11e3):
         """
         Initialize Mars ISAC system parameters.
         
@@ -73,7 +73,7 @@ class MarsISACBounds:
         self.dalpha_dtau = 1.0 / H_dust  # Dimensional consistency
         
         # Prior range for τ_vis - reduced for more realistic Mars conditions
-        self.A_tau = 0.5  # More realistic range [0, 0.5] for typical Mars operations
+        self.A_tau = 0.25  # More realistic range [0, 0.5] for typical Mars operations
         
         print(f"  System initialized: N_eff = {self.N_eff:.0f}, d·α'_τ = {self.d * self.dalpha_dtau:.1f}")
         
