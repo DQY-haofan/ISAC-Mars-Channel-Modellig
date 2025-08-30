@@ -203,7 +203,7 @@ def plot_bounds_comparison(params_dict, save_dir='results', subplot_label=''):
     bcrlb_values = np.array([mars_isac.calculate_bcrlb(snr) for snr in snr_db_range])
     
     # Create figure
-    fig, ax = plt.subplots(figsize=(8, 5))
+    fig, ax = plt.subplots(figsize=(7, 4))
     
     # Plot bounds
     ax.semilogy(snr_db_range, crlb_values, 'b-', label='CRLB', linewidth=3)
