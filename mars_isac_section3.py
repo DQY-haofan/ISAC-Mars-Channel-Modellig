@@ -72,8 +72,8 @@ class MarsISACBounds:
         # Derivative of extinction coefficient w.r.t. τ_vis
         self.dalpha_dtau = 1.0 / H_dust  # Dimensional consistency
         
-        # Prior range for τ_vis
-        self.A_tau = 2.0  # Typical range [0, 2]
+        # Prior range for τ_vis - reduced for more realistic Mars conditions
+        self.A_tau = 0.5  # More realistic range [0, 0.5] for typical Mars operations
         
         print(f"  System initialized: N_eff = {self.N_eff:.0f}, d·α'_τ = {self.d * self.dalpha_dtau:.1f}")
         
@@ -285,14 +285,14 @@ def plot_bounds_comparison(save_dir, scenario='demo'):
     print(f"\nGenerating CRLB vs ZZB comparison plot ({scenario} scenario)...")
     
     if scenario == 'demo':
-        # Demo parameters: reduced N_eff to show threshold effect clearly
+        # Demo parameters: reduced N_eff to show threshold effect
         mars_isac = MarsISACBounds(B=1e6, T=0.2e-3, d=500e3, H_dust=11e3)
-        snr_db_range = np.linspace(-15, 25, 150)
+        snr_db_range = np.linspace(-35, 5, 150)  # Extended to lower SNR
         title_suffix = "Demonstration Parameters (B=1 MHz, T=0.2 ms)"
     else:
-        # Mission parameters with extended SNR range
+        # Mission parameters with very extended SNR range
         mars_isac = MarsISACBounds(B=10e6, T=1e-3, d=500e3, H_dust=11e3)
-        snr_db_range = np.linspace(-40, 10, 150)
+        snr_db_range = np.linspace(-45, 5, 150)  # Much lower SNR range
         title_suffix = "Mission Parameters (B=10 MHz, T=1 ms)"
     
     # Calculate bounds
@@ -324,13 +324,21 @@ def plot_bounds_comparison(save_dir, scenario='demo'):
     if snr_threshold_start is not None:
         ax.axvspan(snr_threshold_start, snr_threshold_end, alpha=0.2, color='orange', label='Threshold Region')
     
-    # Add region annotations
+    # Add region annotations based on scenario
     if scenario == 'demo':
-        ax.text(-10, 1e0, 'Threshold\nRegion', fontsize=10, ha='center',
-                bbox=dict(boxstyle='round,pad=0.3', facecolor='orange', alpha=0.3))
-        ax.text(5, 1e-3, 'Transition', fontsize=10, ha='center',
+        # Mark approximate regions
+        if snr_threshold_start is not None:
+            ax.text(snr_threshold_start + 2, 1e0, 'Threshold\nRegion', fontsize=10, ha='center',
+                    bbox=dict(boxstyle='round,pad=0.3', facecolor='orange', alpha=0.3))
+        ax.text(-10, 1e-3, 'Transition', fontsize=10, ha='center',
                 bbox=dict(boxstyle='round,pad=0.3', facecolor='yellow', alpha=0.3))
-        ax.text(20, 1e-6, 'Asymptotic\nRegion', fontsize=10, ha='center',
+        ax.text(0, 1e-6, 'Asymptotic\nRegion', fontsize=10, ha='center',
+                bbox=dict(boxstyle='round,pad=0.3', facecolor='lightgreen', alpha=0.3))
+    else:
+        # Mission scenario annotations
+        ax.text(-35, 1e0, 'Threshold\nRegion\n(extreme low SNR)', fontsize=9, ha='center',
+                bbox=dict(boxstyle='round,pad=0.3', facecolor='orange', alpha=0.3))
+        ax.text(-10, 1e-4, 'Operational\nRange', fontsize=10, ha='center',
                 bbox=dict(boxstyle='round,pad=0.3', facecolor='lightgreen', alpha=0.3))
     
     # Labels and formatting
@@ -347,12 +355,19 @@ def plot_bounds_comparison(save_dir, scenario='demo'):
     ax.set_xlim([snr_db_range[0], snr_db_range[-1]])
     ax.set_ylim([1e-8, 1e2])
     
-    # Add parameter box
+    # Add parameter box with threshold analysis
     param_text = f'System Parameters:\n'
     param_text += f'B = {mars_isac.B/1e6:.1f} MHz, T = {mars_isac.T*1e3:.1f} ms\n'
     param_text += f'd = {mars_isac.d/1e3:.0f} km, $H_{{dust}}$ = {mars_isac.H_dust/1e3:.0f} km\n'
     param_text += f'$N_{{eff}}$ = {mars_isac.N_eff:.0f}, κ = {mars_isac.kappa:.1f}\n'
-    param_text += f"$\\alpha'_\\tau$ = 1/$H_{{dust}}$ = {mars_isac.dalpha_dtau:.2e} m$^{{-1}}$"
+    param_text += f"$\\alpha'_\\tau$ = 1/$H_{{dust}}$ = {mars_isac.dalpha_dtau:.2e} m$^{{-1}}$\n"
+    param_text += f"$A_\\tau$ = {mars_isac.A_tau:.1f} (prior range [0, {mars_isac.A_tau:.1f}])\n"
+    
+    # Add threshold estimation
+    K_factor = np.sqrt(mars_isac.N_eff/2) * (2*mars_isac.A_tau * mars_isac.d * mars_isac.dalpha_dtau)
+    snr_threshold_est = 1.0 / K_factor
+    snr_threshold_db_est = 10*np.log10(snr_threshold_est) if snr_threshold_est > 0 else -50
+    param_text += f"Est. threshold: {snr_threshold_db_est:.0f} dB"
     ax.text(0.02, 0.02, param_text, transform=ax.transAxes, fontsize=9,
             bbox=dict(boxstyle='round', facecolor='wheat', alpha=0.9))
     
