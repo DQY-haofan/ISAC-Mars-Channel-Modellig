@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """
 Mars ISAC System - Section III: Fundamental Limits of Environmental Sensing
-Clean implementation with flexible parameter control and automatic threshold detection
+Improved visualization with larger fonts and cleaner layout
 """
 
 import numpy as np
@@ -13,25 +13,25 @@ import os
 import warnings
 warnings.filterwarnings('ignore')
 
-# Configure matplotlib for publication quality
+# Configure matplotlib for publication quality with LARGER FONTS
 plt.rcParams.update({
-    'font.size': 11,
+    'font.size': 18,              # Increased from 11
     'font.family': 'sans-serif',
-    'axes.labelsize': 11,
-    'axes.titlesize': 12,
-    'legend.fontsize': 10,
-    'xtick.labelsize': 10,
-    'ytick.labelsize': 10,
-    'figure.figsize': (10, 7),
+    'axes.labelsize': 18,         # Increased from 11
+    'axes.titlesize': 18,         # Increased from 12
+    'legend.fontsize': 16,        # Increased from 10
+    'xtick.labelsize': 16,        # Increased from 10
+    'ytick.labelsize': 16,        # Increased from 10
+    'figure.figsize': (8, 5),
     'figure.dpi': 300,
-    'lines.linewidth': 2.0,
+    'lines.linewidth': 2.5,       # Slightly thicker
     'axes.grid': True,
     'grid.alpha': 0.3,
     'grid.linestyle': ':',
 })
 
 # ============================================================================
-# Core Classes
+# Core Classes (unchanged)
 # ============================================================================
 
 class MarsISACBounds:
@@ -164,17 +164,17 @@ class EFIMAnalysis:
         return eta
 
 # ============================================================================
-# Plotting Functions
+# Plotting Functions with Improved Layout
 # ============================================================================
 
-def plot_bounds_comparison(params_dict, save_dir='results', scenario_name='custom'):
+def plot_bounds_comparison(params_dict, save_dir='results', subplot_label=''):
     """
-    Generate CRLB vs ZZB comparison plot with automatic threshold detection.
+    Generate CRLB vs ZZB comparison plot with cleaner layout.
     
     Args:
         params_dict: Dictionary with keys B, T, d, H_dust, A_tau, kappa
         save_dir: Directory to save figures
-        scenario_name: Name for this scenario
+        subplot_label: Label like '(a)', '(b)', '(c)'
     """
     # Extract parameters
     B = params_dict.get('B', 10e6)
@@ -193,11 +193,9 @@ def plot_bounds_comparison(params_dict, save_dir='results', scenario_name='custo
     snr_max = max(10, snr_threshold_est + 30)
     snr_db_range = np.linspace(snr_min, snr_max, 200)
     
-    print(f"\n{scenario_name.upper()} SCENARIO:")
-    print(f"  Parameters: B={B/1e6:.2f} MHz, T={T*1e3:.2f} ms, d={d/1e3:.0f} km")
-    print(f"  N_eff={mars_isac.N_eff:.1f}, d·α'_τ={mars_isac.d * mars_isac.dalpha_dtau:.2f}")
-    print(f"  Prior range: [0, {A_tau:.2f}]")
-    print(f"  Estimated threshold SNR: {snr_threshold_est:.1f} dB")
+    print(f"\n{subplot_label} Parameters:")
+    print(f"  B={B/1e6:.2f} MHz, T={T*1e3:.2f} ms, d={d/1e3:.0f} km")
+    print(f"  N_eff={mars_isac.N_eff:.1f}, Threshold SNR ≈ {snr_threshold_est:.1f} dB")
     
     # Calculate bounds
     crlb_values = np.array([mars_isac.calculate_crlb(snr) for snr in snr_db_range])
@@ -208,37 +206,36 @@ def plot_bounds_comparison(params_dict, save_dir='results', scenario_name='custo
     fig, ax = plt.subplots(figsize=(10, 7))
     
     # Plot bounds
-    ax.semilogy(snr_db_range, crlb_values, 'b-', label='CRLB', linewidth=2.5)
-    ax.semilogy(snr_db_range, zzb_values, 'r--', label='ZZB', linewidth=2.5)
-    ax.semilogy(snr_db_range, bcrlb_values, 'g-.', label='BCRLB', linewidth=2, alpha=0.8)
+    ax.semilogy(snr_db_range, crlb_values, 'b-', label='CRLB', linewidth=3)
+    ax.semilogy(snr_db_range, zzb_values, 'r--', label='ZZB', linewidth=3)
+    ax.semilogy(snr_db_range, bcrlb_values, 'g-.', label='BCRLB', linewidth=2.5, alpha=0.8)
     
     # Mark estimated threshold
     if snr_min <= snr_threshold_est <= snr_max:
-        ax.axvline(x=snr_threshold_est, color='k', linestyle=':', alpha=0.3, linewidth=1)
+        ax.axvline(x=snr_threshold_est, color='k', linestyle=':', alpha=0.3, linewidth=1.5)
     
-    # Dynamic title
-    title = f'Performance Bounds for Mars Dust Optical Depth Estimation\n'
-    title += f'B={B/1e6:.2f} MHz, T={T*1e3:.2f} ms, d={d/1e3:.0f} km, '
-    title += f'N_eff={mars_isac.N_eff:.0f}, Prior: [0, {A_tau:.2f}]'
-    ax.set_title(title, fontsize=12, fontweight='bold')
+    # Simplified title with subplot label
+    title = f'{subplot_label} Mars Dust Sensing Performance Bounds'
+    ax.set_title(title, fontsize=18, fontweight='bold', pad=15)
     
-    # Labels and formatting
-    ax.set_xlabel('Signal-to-Noise Ratio (SNR$_{rx}$) [dB]', fontsize=11)
-    ax.set_ylabel('Mean Squared Error (MSE) for $\\tau_{vis}$', fontsize=11)
+    # Labels
+    ax.set_xlabel('SNR [dB]', fontsize=16)
+    ax.set_ylabel('MSE for $\\tau_{vis}$', fontsize=16)
     ax.grid(True, which='both', linestyle=':', alpha=0.3)
-    ax.legend(loc='best', fontsize=10, frameon=True)
+    ax.legend(loc='best', fontsize=14, frameon=True, shadow=True)
     ax.set_xlim([snr_min, snr_max])
     ax.set_ylim([1e-8, 1e2])
     
-    # Add minimal parameter info
-    info_text = f'Threshold SNR ≈ {snr_threshold_est:.1f} dB'
-    ax.text(0.98, 0.02, info_text, transform=ax.transAxes, fontsize=9,
-            ha='right', bbox=dict(boxstyle='round', facecolor='wheat', alpha=0.7))
+    # Add parameter box (smaller, bottom right)
+    info_text = f'B={B/1e6:.1f} MHz\nd={d/1e3:.0f} km\nThreshold≈{snr_threshold_est:.1f} dB'
+    ax.text(0.97, 0.03, info_text, transform=ax.transAxes, fontsize=11,
+            ha='right', va='bottom',
+            bbox=dict(boxstyle='round', facecolor='wheat', alpha=0.8))
     
     # Save figure
     plt.tight_layout()
     os.makedirs(save_dir, exist_ok=True)
-    filename = f'fig3_1_bounds_{scenario_name}'
+    filename = f'fig3_1_bounds_{subplot_label.strip("()")}'
     fig.savefig(os.path.join(save_dir, f'{filename}.pdf'), format='pdf', dpi=300)
     fig.savefig(os.path.join(save_dir, f'{filename}.png'), format='png', dpi=300)
     plt.show()
@@ -246,7 +243,7 @@ def plot_bounds_comparison(params_dict, save_dir='results', scenario_name='custo
     return fig
 
 def plot_efim_heatmap(params_dict, save_dir='results'):
-    """Generate EFIM degradation heatmap."""
+    """Generate EFIM degradation heatmap with larger fonts."""
     B = params_dict.get('B', 10e6)
     T = params_dict.get('T', 1e-3)
     d = params_dict.get('d', 500e3)
@@ -268,7 +265,7 @@ def plot_efim_heatmap(params_dict, save_dir='results'):
             ETA[i, j] = efim.calculate_eta(PHI[i, j], EPSILON[i, j])
     
     # Create figure
-    fig, (ax1, ax2) = plt.subplots(1, 2, figsize=(14, 6))
+    fig, (ax1, ax2) = plt.subplots(1, 2, figsize=(15, 6))
     
     # Heatmap
     im = ax1.pcolormesh(EPSILON * 1e9, PHI, ETA, cmap='plasma', 
@@ -277,16 +274,18 @@ def plot_efim_heatmap(params_dict, save_dir='results'):
     # Contours
     levels = [1.05, 1.1, 1.2, 1.5, 2.0]
     CS = ax1.contour(EPSILON * 1e9, PHI, ETA, levels=levels, 
-                     colors='white', linewidths=1.0, alpha=0.7)
-    ax1.clabel(CS, inline=True, fontsize=8, fmt='%.2f')
+                     colors='white', linewidths=1.5, alpha=0.7)
+    ax1.clabel(CS, inline=True, fontsize=11, fmt='%.2f')
     
     ax1.set_xscale('log')
     ax1.set_yscale('log')
-    ax1.set_xlabel('Timing Jitter Std. Dev. [ns]', fontsize=11)
-    ax1.set_ylabel('Phase Noise Std. Dev. [rad]', fontsize=11)
-    ax1.set_title(f'EFIM Degradation Factor (ψ={psi:.3f}, γ₂={gamma2:.3f})', fontsize=12)
+    ax1.set_xlabel('Timing Jitter [ns]', fontsize=16)
+    ax1.set_ylabel('Phase Noise [rad]', fontsize=16)
+    ax1.set_title('EFIM Degradation Factor', fontsize=18, fontweight='bold')
     
-    plt.colorbar(im, ax=ax1, label='η')
+    cbar = plt.colorbar(im, ax=ax1)
+    cbar.set_label('η', fontsize=15)
+    cbar.ax.tick_params(labelsize=12)
     
     # Cross-sections
     for phi_val, color, label in zip([0.001, 0.01, 0.1], 
@@ -294,14 +293,14 @@ def plot_efim_heatmap(params_dict, save_dir='results'):
                                      ['1 mrad', '10 mrad', '100 mrad']):
         eta_slice = [efim.calculate_eta(phi_val, eps) for eps in epsilon_std_range]
         ax2.semilogx(epsilon_std_range * 1e9, eta_slice, color=color, 
-                    label=f'φ = {label}', linewidth=2)
+                    label=f'φ = {label}', linewidth=2.5)
     
-    ax2.axhline(y=1.0, color='k', linestyle=':', alpha=0.5)
-    ax2.set_xlabel('Timing Jitter Std. Dev. [ns]', fontsize=11)
-    ax2.set_ylabel('Degradation Factor η', fontsize=11)
-    ax2.set_title('Cross-Sections', fontsize=12)
+    ax2.axhline(y=1.0, color='k', linestyle=':', alpha=0.5, linewidth=1.5)
+    ax2.set_xlabel('Timing Jitter [ns]', fontsize=16)
+    ax2.set_ylabel('Degradation Factor η', fontsize=16)
+    ax2.set_title('Cross-Sections', fontsize=18, fontweight='bold')
     ax2.grid(True, which='both', linestyle=':', alpha=0.3)
-    ax2.legend(loc='best', fontsize=10)
+    ax2.legend(loc='best', fontsize=13)
     ax2.set_ylim([0.9, 2.5])
     
     plt.tight_layout()
@@ -316,8 +315,8 @@ def plot_efim_heatmap(params_dict, save_dir='results'):
 # Parameter Configurations
 # ============================================================================
 
-def get_mission_params():
-    """Mission-level parameters (realistic but threshold far left)."""
+def get_params_a():
+    """Configuration (a) - Mission parameters."""
     return {
         'B': 10e6,        # 10 MHz
         'T': 1e-3,        # 1 ms
@@ -327,8 +326,8 @@ def get_mission_params():
         'kappa': 1.2
     }
 
-def get_demo_params():
-    """Demonstration parameters (visible threshold effect)."""
+def get_params_b():
+    """Configuration (b) - Demonstration parameters."""
     return {
         'B': 100e3,       # 100 kHz
         'T': 0.5e-3,      # 0.5 ms
@@ -338,8 +337,8 @@ def get_demo_params():
         'kappa': 1.2
     }
 
-def get_textbook_params():
-    """Textbook parameters (threshold in common SNR range)."""
+def get_params_c():
+    """Configuration (c) - Textbook parameters."""
     return {
         'B': 50e3,        # 50 kHz
         'T': 0.2e-3,      # 0.2 ms
@@ -354,27 +353,26 @@ def get_textbook_params():
 # ============================================================================
 
 def main():
-    """Generate all figures with different parameter sets."""
+    """Generate all figures with simplified labeling."""
     print("\n" + "=" * 70)
-    print("MARS ISAC SYSTEM - SECTION III ANALYSIS")
-    print("Fundamental Limits of Environmental Sensing")
+    print("MARS ISAC SYSTEM - PERFORMANCE BOUNDS ANALYSIS")
     print("=" * 70)
     
     save_dir = 'results'
     
-    # Generate bounds comparison for different scenarios
-    scenarios = [
-        ('mission', get_mission_params()),
-        ('demo', get_demo_params()),
-        ('textbook', get_textbook_params())
+    # Generate bounds comparison for different configurations
+    configurations = [
+        ('(a)', get_params_a()),
+        ('(b)', get_params_b()),
+        ('(c)', get_params_c())
     ]
     
-    for name, params in scenarios:
-        plot_bounds_comparison(params, save_dir, name)
+    for label, params in configurations:
+        plot_bounds_comparison(params, save_dir, label)
     
-    # Generate EFIM heatmap (only for mission parameters)
+    # Generate EFIM heatmap
     print("\nGenerating EFIM analysis...")
-    efim_params = get_mission_params()
+    efim_params = get_params_a()  # Use configuration (a) for EFIM
     efim_params.update({'psi': 0.02, 'gamma2': 0.01})
     plot_efim_heatmap(efim_params, save_dir)
     
@@ -382,17 +380,10 @@ def main():
     print("ANALYSIS COMPLETE")
     print("=" * 70)
     print("\nGenerated files:")
-    print("  • fig3_1_bounds_mission.pdf/png - Mission parameters")
-    print("  • fig3_1_bounds_demo.pdf/png - Demonstration")
-    print("  • fig3_1_bounds_textbook.pdf/png - Textbook example")
-    print("  • fig3_2_efim.pdf/png - EFIM degradation")
-    
-    # Summary
-    print("\nKey findings:")
-    print("  • Mission scenario: Threshold at very low SNR (< -30 dB)")
-    print("  • Demo scenario: Threshold visible around -15 dB")
-    print("  • Textbook scenario: Clear threshold effect near 0 dB")
-    print("  • EFIM: Minimal degradation (η ≈ 1.0-1.2) with modern synchronization")
+    print("  • fig3_1_bounds_a.pdf/png")
+    print("  • fig3_1_bounds_b.pdf/png")
+    print("  • fig3_1_bounds_c.pdf/png")
+    print("  • fig3_2_efim.pdf/png")
 
 if __name__ == "__main__":
     main()
