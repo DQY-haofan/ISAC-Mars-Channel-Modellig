@@ -203,7 +203,7 @@ def plot_bounds_comparison(params_dict, save_dir='results', subplot_label=''):
     bcrlb_values = np.array([mars_isac.calculate_bcrlb(snr) for snr in snr_db_range])
     
     # Create figure
-    fig, ax = plt.subplots(figsize=(10, 7))
+    fig, ax = plt.subplots(figsize=(9, 7))
     
     # Plot bounds
     ax.semilogy(snr_db_range, crlb_values, 'b-', label='CRLB', linewidth=3)
@@ -219,16 +219,16 @@ def plot_bounds_comparison(params_dict, save_dir='results', subplot_label=''):
     ax.set_title(title, fontsize=20, fontweight='bold', pad=15)
     
     # Labels
-    ax.set_xlabel('SNR [dB]', fontsize=18)
-    ax.set_ylabel('MSE for $\\tau_{vis}$', fontsize=18)
+    ax.set_xlabel('SNR [dB]', fontsize=20)
+    ax.set_ylabel('MSE for $\\tau_{vis}$', fontsize=20)
     ax.grid(True, which='both', linestyle=':', alpha=0.3)
-    ax.legend(loc='best', fontsize=18, frameon=True, shadow=True)
+    ax.legend(loc='best', fontsize=20, frameon=True, shadow=True)
     ax.set_xlim([snr_min, snr_max])
     ax.set_ylim([1e-8, 1e2])
     
     # Add parameter box (smaller, bottom right)
     info_text = f'B={B/1e6:.1f} MHz\nd={d/1e3:.0f} km\nThreshold≈{snr_threshold_est:.1f} dB'
-    ax.text(0.97, 0.03, info_text, transform=ax.transAxes, fontsize=14,
+    ax.text(0.97, 0.03, info_text, transform=ax.transAxes, fontsize=18,
             ha='right', va='bottom',
             bbox=dict(boxstyle='round', facecolor='wheat', alpha=0.8))
     
