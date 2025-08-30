@@ -215,7 +215,7 @@ def plot_bounds_comparison(params_dict, save_dir='results', subplot_label=''):
         ax.axvline(x=snr_threshold_est, color='k', linestyle=':', alpha=0.3, linewidth=1.5)
     
     # Simplified title with subplot label
-    title = f'{subplot_label} Mars Dust Sensing Performance Bounds'
+    title = f'Performance Bounds: B={B/1e6:.1f} MHz, T={T*1e3:.1f} ms, d={d/1e3:.0f} km'
     ax.set_title(title, fontsize=22, fontweight='bold', pad=15)
     
     # Labels
