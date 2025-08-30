@@ -215,7 +215,7 @@ def plot_bounds_comparison(params_dict, save_dir='results', subplot_label=''):
         ax.axvline(x=snr_threshold_est, color='k', linestyle=':', alpha=0.3, linewidth=1.5)
     
     # Simplified title with subplot label
-    title = f'Performance Bounds: B={B/1e6:.1f} MHz, T={T*1e3:.1f} ms, d={d/1e3:.0f} km'
+    title = f'B={B/1e6:.1f} MHz, T={T*1e3:.1f} ms, d={d/1e3:.0f} km'
     ax.set_title(title, fontsize=20, fontweight='bold', pad=15)
     
     # Labels
@@ -229,7 +229,7 @@ def plot_bounds_comparison(params_dict, save_dir='results', subplot_label=''):
     # Add parameter box (smaller, bottom right)
     info_text = f'B={B/1e6:.1f} MHz\nd={d/1e3:.0f} km\nThreshold≈{snr_threshold_est:.1f} dB'
     ax.text(0.97, 0.03, info_text, transform=ax.transAxes, fontsize=18,
-            ha='right', va='bottom',
+            ha='left', va='bottom',
             bbox=dict(boxstyle='round', facecolor='wheat', alpha=0.8))
     
     # Save figure
