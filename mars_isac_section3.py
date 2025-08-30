@@ -226,11 +226,11 @@ def plot_bounds_comparison(params_dict, save_dir='results', subplot_label=''):
     ax.set_xlim([snr_min, snr_max])
     ax.set_ylim([1e-8, 1e2])
     
-    # Add parameter box (smaller, bottom right)
-    info_text = f'B={B/1e6:.1f} MHz\nd={d/1e3:.0f} km\nThreshold≈{snr_threshold_est:.1f} dB'
-    ax.text(0.97, 0.03, info_text, transform=ax.transAxes, fontsize=18,
-            ha='left', va='bottom',
-            bbox=dict(boxstyle='round', facecolor='wheat', alpha=0.8))
+    # # Add parameter box (smaller, bottom right)
+    # info_text = f'B={B/1e6:.1f} MHz\nd={d/1e3:.0f} km\nThreshold≈{snr_threshold_est:.1f} dB'
+    # ax.text(0.97, 0.03, info_text, transform=ax.transAxes, fontsize=18,
+    #         ha='right', va='bottom',
+    #         bbox=dict(boxstyle='round', facecolor='wheat', alpha=0.8))
     
     # Save figure
     plt.tight_layout()
