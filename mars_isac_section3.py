@@ -15,16 +15,16 @@ warnings.filterwarnings('ignore')
 
 # Configure matplotlib for publication quality with LARGER FONTS
 plt.rcParams.update({
-    'font.size': 18,              # Increased from 11
+    'font.size': 22,              # Increased from 11
     'font.family': 'sans-serif',
-    'axes.labelsize': 18,         # Increased from 11
-    'axes.titlesize': 18,         # Increased from 12
-    'legend.fontsize': 16,        # Increased from 10
-    'xtick.labelsize': 16,        # Increased from 10
-    'ytick.labelsize': 16,        # Increased from 10
-    'figure.figsize': (8, 5),
+    'axes.labelsize': 22,         # Increased from 11
+    'axes.titlesize': 22,         # Increased from 12
+    'legend.fontsize': 18,        # Increased from 10
+    'xtick.labelsize': 18,        # Increased from 10
+    'ytick.labelsize': 18,        # Increased from 10
+    'figure.figsize': (7, 4),
     'figure.dpi': 300,
-    'lines.linewidth': 2.5,       # Slightly thicker
+    'lines.linewidth': 3,       # Slightly thicker
     'axes.grid': True,
     'grid.alpha': 0.3,
     'grid.linestyle': ':',
