@@ -48,7 +48,7 @@ class MarsISACBounds:
     Implements correct Fisher Information scaling and ZZB computation.
     """
     
-    def __init__(self, B=10e4, T=1e-2, d=5e3, H_dust=11e3):
+    def __init__(self, B=10e6, T=1e-3, d=500e3, H_dust=11e3):
         """
         Initialize Mars ISAC system parameters.
         
