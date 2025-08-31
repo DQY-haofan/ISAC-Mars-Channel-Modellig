@@ -307,6 +307,69 @@ class MarsISACSystem:
 # Pareto Boundary Computation (Corrected)
 # ============================================================================
 
+def compute_pareto_boundary_scalarized(system, tau_vis, S4, num_weights=101):
+    """
+    Compute Pareto optimal boundary using scalarized optimization.
+    This method provides smoother results than non-dominated sorting.
+    
+    Args:
+        system: MarsISACSystem instance
+        tau_vis: Dust optical depth
+        S4: Scintillation index
+        num_weights: Number of weight values to scan
+        
+    Returns:
+        Arrays of (sensing_precision, communication_capacity) points on Pareto frontier
+    """
+    # First compute performance over grid
+    num_grid = 41
+    rho_values = np.linspace(0, 1, num_grid)
+    beta_values = np.linspace(0, 1, num_grid)
+    
+    # Pre-compute all performance values
+    PRECISION = np.zeros((num_grid, num_grid))
+    CAPACITY = np.zeros((num_grid, num_grid))
+    
+    for i, beta in enumerate(beta_values):
+        for j, rho in enumerate(rho_values):
+            PRECISION[i, j] = system.sensing_precision(rho, beta, tau_vis, S4, target='dust')
+            CAPACITY[i, j] = system.ergodic_capacity_nakagami(rho, beta, tau_vis, S4)
+    
+    # Normalize for scalarization
+    P_max = np.max(PRECISION)
+    C_max = np.max(CAPACITY)
+    
+    # Weight scanning to trace Pareto frontier
+    lambdas = np.linspace(0, 1, num_weights)
+    frontier_s = []
+    frontier_r = []
+    
+    for lam in lambdas:
+        # Scalarized objective: λ*R_C + (1-λ)*P_S (normalized)
+        if P_max > 0 and C_max > 0:
+            J = lam * (CAPACITY / C_max) + (1 - lam) * (PRECISION / P_max)
+        else:
+            J = CAPACITY if lam > 0.5 else PRECISION
+            
+        # Find optimal point for this weight
+        idx = np.unravel_index(np.argmax(J), J.shape)
+        frontier_s.append(PRECISION[idx])
+        frontier_r.append(CAPACITY[idx] / 1e6)  # Convert to Mbps
+    
+    # Convert to arrays and sort by sensing precision
+    frontier_s = np.array(frontier_s)
+    frontier_r = np.array(frontier_r)
+    
+    # Sort by sensing precision
+    idx_sort = np.argsort(frontier_s)
+    s_sorted = frontier_s[idx_sort]
+    r_sorted = frontier_r[idx_sort]
+    
+    # Apply monotonic non-increasing envelope to ensure proper Pareto property
+    r_envelope = np.maximum.accumulate(r_sorted[::-1])[::-1]
+    
+    return s_sorted, r_envelope
+
 def compute_pareto_boundary(system, tau_vis, S4, num_grid=101):
     """
     Compute true Pareto optimal boundary using grid search and non-dominated sorting.
@@ -320,43 +383,8 @@ def compute_pareto_boundary(system, tau_vis, S4, num_grid=101):
     Returns:
         Arrays of (sensing_precision, communication_capacity) points on Pareto frontier
     """
-    # Grid search over (rho, beta) space
-    rho_values = np.linspace(0, 1, num_grid)
-    beta_values = np.linspace(0, 1, num_grid)
-    
-    # Store all feasible points
-    points = []
-    
-    for rho in rho_values:
-        for beta in beta_values:
-            # Calculate performance metrics
-            precision = system.sensing_precision(rho, beta, tau_vis, S4, target='dust')
-            capacity = system.ergodic_capacity_nakagami(rho, beta, tau_vis, S4)
-            
-            points.append((precision, capacity / 1e6))  # Convert to Mbps
-    
-    # Non-dominated sorting to find Pareto frontier
-    points = np.array(points)
-    n_points = len(points)
-    is_dominated = np.zeros(n_points, dtype=bool)
-    
-    for i in range(n_points):
-        for j in range(n_points):
-            if i != j:
-                # Check if point j dominates point i
-                if (points[j, 0] >= points[i, 0] and points[j, 1] >= points[i, 1] and
-                    (points[j, 0] > points[i, 0] or points[j, 1] > points[i, 1])):
-                    is_dominated[i] = True
-                    break
-    
-    # Extract Pareto frontier
-    pareto_points = points[~is_dominated]
-    
-    # Sort by sensing precision for smooth curve
-    sorted_idx = np.argsort(pareto_points[:, 0])
-    pareto_points = pareto_points[sorted_idx]
-    
-    return pareto_points[:, 0], pareto_points[:, 1]
+    # Use scalarized method for better stability
+    return compute_pareto_boundary_scalarized(system, tau_vis, S4, num_weights=101)
 
 def compute_tdm_baseline(system, tau_vis, S4):
     """
@@ -424,13 +452,14 @@ def plot_pareto_boundaries():
             system, scenario['tau_vis'], scenario['S4'], num_grid=101
         )
         
-        # Apply upper envelope to remove sawtooth artifacts
+        # Sort by sensing precision (ascending)
         idx_sort = np.argsort(sensing)
         s_sorted = sensing[idx_sort]
         r_sorted = comm[idx_sort]
         
-        # Create monotonic upper envelope
-        r_envelope = np.maximum.accumulate(r_sorted)
+        # Create monotonic non-increasing upper envelope
+        # Reverse accumulate: for each s, take max of all s' >= s
+        r_envelope = np.maximum.accumulate(r_sorted[::-1])[::-1]
         
         # Store for analysis
         boundaries[scenario['name']] = (s_sorted, r_envelope)
@@ -440,7 +469,7 @@ def plot_pareto_boundaries():
         print(f"  Max communication rate: {np.max(r_envelope):.2f} Mbps")
         
         # Plot Pareto curve (smooth envelope)
-        ax.plot(s_sorted, r_envelope,  # Use envelope to avoid sawtooth
+        ax.plot(s_sorted, r_envelope,  # Use corrected envelope
                 color=scenario['color'],
                 linestyle=scenario['linestyle'],
                 linewidth=2.5,
@@ -464,19 +493,14 @@ def plot_pareto_boundaries():
                    alpha=0.6)
             
             # Shade synergistic gain region with proper monotonic interpolation
-            if len(sensing) > 1:
-                # Ensure monotonic ordering for interpolation
-                idx_sort = np.argsort(sensing)
-                s_sorted = sensing[idx_sort]
-                r_sorted = comm[idx_sort]
-                
+            if len(s_sorted) > 1:
+                # s_sorted is already monotonic from the sorting above
                 # Interpolate TDM line to Pareto points
-                if s_sorted[-1] > s_sorted[0]:  # Check monotonicity
-                    comm_tdm_interp = np.interp(s_sorted, sensing_tdm, comm_tdm)
-                    ax.fill_between(s_sorted, r_sorted, comm_tdm_interp,
-                                   where=(r_sorted >= comm_tdm_interp),
-                                   color='blue', alpha=0.1,
-                                   label='Synergistic Gain')
+                comm_tdm_interp = np.interp(s_sorted, sensing_tdm, comm_tdm)
+                ax.fill_between(s_sorted, r_envelope, comm_tdm_interp,
+                               where=(r_envelope >= comm_tdm_interp),
+                               color='blue', alpha=0.1,
+                               label='Synergistic Gain')
     
     # Calculate and display synergistic gains
     print("\n" + "=" * 60)
