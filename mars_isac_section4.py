@@ -323,7 +323,7 @@ def plot_single_band(link_type, save_name):
     """
     # Set large fonts for publication
     plt.rcParams.update({
-        'font.size': 22,
+        'font.size': 24,
         'axes.labelsize': 24,
         'axes.titlesize': 24,
         'legend.fontsize': 22,
