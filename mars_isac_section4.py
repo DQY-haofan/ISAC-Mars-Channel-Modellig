@@ -67,7 +67,7 @@ class MarsISACSystem:
             self.G_r_dBi = 45     # High-gain antenna [dBi]
             # Conservative pilot reuse for Ka-band
             self.psi = 0.05       # 5% fixed pilot overhead
-            self.xi = 0.60        # 60% penalty (moderate reuse)
+            self.xi = 0.70        # 60% penalty (moderate reuse)
             
         elif link_type == 'fso':
             # Free Space Optical Link with realistic parameters
@@ -81,7 +81,7 @@ class MarsISACSystem:
             self.G_r_dBi = 120    # ~10^12 linear gain
             # Conservative pilot reuse for FSO
             self.psi = 0.05       # 5% fixed overhead
-            self.xi = 0.50        # 50% penalty (limited reuse + tracking overhead)
+            self.xi = 0.60        # 50% penalty (limited reuse + tracking overhead)
             
         else:
             raise ValueError("link_type must be 'uhf', 'ka', or 'fso'")
@@ -360,7 +360,7 @@ def plot_single_band(link_type, save_name):
         
         # Convert to appropriate units for FSO
         if link_type == 'fso':
-            r_envelope = r_envelope / 1000  # Convert to Gbps
+            r_envelope = r_envelope / 1e9  # Convert to Gbps
         else:
             r_envelope = r_envelope / 1e6    # Convert to Mbps
         
@@ -400,7 +400,7 @@ def plot_single_band(link_type, save_name):
             )
             
             if link_type == 'fso':
-                comm_tdm = comm_tdm / 1000  # Gbps
+                comm_tdm = comm_tdm / 1e9  # Gbps
             else:
                 comm_tdm = comm_tdm / 1e6   # Mbps
                 
