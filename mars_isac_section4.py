@@ -518,7 +518,7 @@ def plot_pareto_boundaries_dual_band():
                     print(f"  {name:20s}: {gain:+.1f}%")
         
         # Format subplot
-        ax.set_xlabel('Normalized Sensing Precision $\\bar{P}_S$')
+        ax.set_xlabel('Normalized Sensing Precision $\\bar{P}_S
 
 def plot_resource_allocation_heatmap():
     """
@@ -669,7 +669,7 @@ def main():
     print("   • Normalized utility metrics for meaningful optimization")
 
 if __name__ == "__main__":
-    main(), fontsize=11)
+    main()
         ax.set_ylabel('Communication Capacity $R_C$ [Mbps]', fontsize=11)
         ax.set_title(f'{band_name} Pareto Boundaries', fontsize=12, fontweight='bold')
         ax.grid(True, linestyle=':', alpha=0.3)
