@@ -390,10 +390,10 @@ def plot_single_band(link_type, save_name):
         ax.plot(s_plot, r_envelope,
                color=scenario['color'],
                linestyle=scenario['linestyle'],
-               linewidth=2.5,
+               linewidth=3,  # Changed from 2.5 to match rcParams
                marker=scenario['marker'],
                markevery=max(1, len(s_plot)//10),
-               markersize=7,
+               markersize=8,  # Changed from 7 to match rcParams
                label=label,
                alpha=0.9)
         
@@ -412,7 +412,7 @@ def plot_single_band(link_type, save_name):
             s_tdm_plot = sensing_tdm / P_ref if P_ref > 0 else sensing_tdm
             
             ax.plot(s_tdm_plot, comm_tdm,
-                   color='black', linestyle=':', linewidth=2,
+                   color='black', linestyle=':', linewidth=2.5,  # Increased from 2
                    label='TDM', alpha=0.7)
             
             # Synergistic gain shading (conservative calculation)
@@ -436,20 +436,20 @@ def plot_single_band(link_type, save_name):
     # Add synergistic gain value (clean, no box)
     if baseline_gain is not None and baseline_gain > 0:
         ax.text(0.75, 0.12, f'+{baseline_gain:.0f}%',
-               transform=ax.transAxes, fontsize=14, fontweight='bold',
+               transform=ax.transAxes, fontsize=20, fontweight='bold',  # Increased from 14
                color='darkgreen', ha='center')
     
-    # Clean formatting
-    ax.set_xlabel(r'Normalized Sensing Precision $\bar{P}_S$', fontsize=14)
+    # Clean formatting - using default sizes from rcParams (no explicit fontsize)
+    ax.set_xlabel(r'Normalized Sensing Precision $\bar{P}_S$')  # Removed fontsize=14
     
     if link_type == 'fso':
-        ax.set_ylabel('Communication Rate [Gbps]', fontsize=14)
+        ax.set_ylabel('Communication Rate [Gbps]')  # Removed fontsize=14
     else:
-        ax.set_ylabel('Communication Rate [Mbps]', fontsize=14)
+        ax.set_ylabel('Communication Rate [Mbps]')  # Removed fontsize=14
     
-    ax.set_title(band_names[link_type], fontsize=16, fontweight='bold')
+    ax.set_title(band_names[link_type])  # Removed fontsize=16, fontweight='bold'
     ax.grid(True, linestyle=':', alpha=0.3)
-    ax.legend(loc='upper right', fontsize=11, frameon=False)
+    ax.legend(loc='upper right', frameon=False)  # Removed fontsize=11
     ax.set_xlim([0, 1.05])
     ax.set_ylim([0, None])
     
