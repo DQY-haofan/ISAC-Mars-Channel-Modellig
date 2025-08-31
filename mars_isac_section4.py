@@ -307,7 +307,7 @@ class MarsISACSystem:
 # Pareto Boundary Computation (Corrected)
 # ============================================================================
 
-def compute_pareto_boundary(system, tau_vis, S4, num_grid=31):
+def compute_pareto_boundary(system, tau_vis, S4, num_grid=101):
     """
     Compute true Pareto optimal boundary using grid search and non-dominated sorting.
     
@@ -421,23 +421,31 @@ def plot_pareto_boundaries():
         
         # Compute true Pareto boundary
         sensing, comm = compute_pareto_boundary(
-            system, scenario['tau_vis'], scenario['S4'], num_grid=25
+            system, scenario['tau_vis'], scenario['S4'], num_grid=101
         )
         
+        # Apply upper envelope to remove sawtooth artifacts
+        idx_sort = np.argsort(sensing)
+        s_sorted = sensing[idx_sort]
+        r_sorted = comm[idx_sort]
+        
+        # Create monotonic upper envelope
+        r_envelope = np.maximum.accumulate(r_sorted)
+        
         # Store for analysis
-        boundaries[scenario['name']] = (sensing, comm)
+        boundaries[scenario['name']] = (s_sorted, r_envelope)
         
         # Print actual performance values
-        print(f"  Max sensing precision: {np.max(sensing):.2e}")
-        print(f"  Max communication rate: {np.max(comm):.2f} Mbps")
+        print(f"  Max sensing precision: {np.max(s_sorted):.2e}")
+        print(f"  Max communication rate: {np.max(r_envelope):.2f} Mbps")
         
-        # Plot Pareto curve
-        ax.plot(sensing, comm,  # Keep original units
+        # Plot Pareto curve (smooth envelope)
+        ax.plot(s_sorted, r_envelope,  # Use envelope to avoid sawtooth
                 color=scenario['color'],
                 linestyle=scenario['linestyle'],
                 linewidth=2.5,
                 marker=scenario['marker'],
-                markevery=max(1, len(sensing)//10),
+                markevery=max(1, len(s_sorted)//10),
                 markersize=6,
                 label=f"{scenario['name']} (τ={scenario['tau_vis']}, S₄={scenario['S4']})",
                 alpha=0.8)
@@ -550,11 +558,14 @@ def plot_resource_allocation_heatmap():
     P_max = np.max(PRECISION)
     C_max = np.max(CAPACITY)
     
-    # Combined utility with proper normalization
+    # Combined utility using geometric mean (avoids linear flatness)
     w_s = 0.5  # Weight for sensing
     w_c = 0.5  # Weight for communication
+    eps = 1e-12  # Small constant for numerical stability
     
-    UTILITY = w_s * (PRECISION / P_max) + w_c * (CAPACITY / C_max)
+    # Geometric mean provides better interior optimum
+    UTILITY = np.exp(w_s * np.log(PRECISION/P_max + eps) + 
+                     w_c * np.log(CAPACITY/C_max + eps))
     
     # Create figure
     fig, (ax1, ax2) = plt.subplots(1, 2, figsize=(14, 6))
@@ -586,16 +597,16 @@ def plot_resource_allocation_heatmap():
     cbar1 = plt.colorbar(im1, ax=ax1)
     cbar1.set_label('Normalized Combined Utility', fontsize=10)
     
-    # Right panel: Individual metrics contours
-    # Plot sensing precision contours
-    CS2 = ax2.contour(RHO, BETA, PRECISION * 1e3, levels=8, colors='blue', 
+    # Right panel: Individual metrics contours (normalized)
+    # Plot normalized sensing precision contours
+    CS2 = ax2.contour(RHO, BETA, PRECISION/P_max, levels=8, colors='blue', 
                       linewidths=1.5, alpha=0.7)
-    ax2.clabel(CS2, inline=True, fontsize=8, fmt='P=%.1f')
+    ax2.clabel(CS2, inline=True, fontsize=8, fmt='P=%.2f')
     
-    # Plot communication capacity contours
-    CS3 = ax2.contour(RHO, BETA, CAPACITY / 1e6, levels=8, colors='red', 
+    # Plot normalized communication capacity contours  
+    CS3 = ax2.contour(RHO, BETA, CAPACITY/C_max, levels=8, colors='red', 
                       linewidths=1.5, alpha=0.7)
-    ax2.clabel(CS3, inline=True, fontsize=8, fmt='R=%.0f')
+    ax2.clabel(CS3, inline=True, fontsize=8, fmt='R=%.2f')
     
     # Mark optimal point
     ax2.plot(opt_rho, opt_beta, 'g*', markersize=15, label='Optimal Point')
