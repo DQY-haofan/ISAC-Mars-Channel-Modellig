@@ -122,18 +122,38 @@ class MarsISACSystem:
         self.H_dust = 11e3    # Dust scale height [m]
         self.beta_ext = 0.012 # Mass extinction efficiency [m²/g]
         
+    def dust_extinction_scale(self):
+        """
+        Calculate frequency-dependent dust extinction scaling factor.
+        Dust scattering is wavelength-dependent: negligible at UHF, significant at optical.
+        
+        Returns:
+            Scaling factor κ_ext(f) for dust extinction
+        """
+        f_GHz = self.f_c / 1e9
+        
+        if f_GHz < 1.0:         # UHF/VHF - Rayleigh regime, negligible extinction
+            return 1e-6         # Near-zero but non-zero for numerical stability
+        elif f_GHz < 10.0:      # L/S/C/X bands
+            return 1e-3
+        elif f_GHz < 100.0:     # Ku/Ka/W bands - Mie scattering becomes significant
+            return 5e-2
+        else:                   # Optical/FSO - full extinction
+            return 1.0
+    
     def calculate_attenuation(self, tau_vis):
         """
-        Calculate atmospheric attenuation factor.
+        Calculate atmospheric attenuation factor with frequency-dependent scaling.
         
         Args:
-            tau_vis: Dust optical depth
+            tau_vis: Dust optical depth (at visible wavelengths)
             
         Returns:
             Attenuation factor (linear scale)
         """
-        # Correct formula: alpha_ext = tau_vis / H_dust (not beta_ext * tau_vis / H_dust)
-        alpha_ext = tau_vis / self.H_dust
+        # Frequency-scaled extinction coefficient
+        kappa_ext = self.dust_extinction_scale()
+        alpha_ext = kappa_ext * (tau_vis / self.H_dust)
         return np.exp(-alpha_ext * self.d)
     
     def calculate_average_snr(self, rho, tau_vis):
@@ -412,7 +432,7 @@ def plot_pareto_boundaries():
         print(f"  Max communication rate: {np.max(comm):.2f} Mbps")
         
         # Plot Pareto curve
-        ax.plot(sensing * 1e3, comm,  # Scale sensing to milli-units for better visualization
+        ax.plot(sensing, comm,  # Keep original units
                 color=scenario['color'],
                 linestyle=scenario['linestyle'],
                 linewidth=2.5,
@@ -428,22 +448,27 @@ def plot_pareto_boundaries():
         )
         
         if scenario['name'] == 'Baseline':
-            ax.plot(sensing_tdm * 1e3, comm_tdm,
+            ax.plot(sensing_tdm, comm_tdm,
                    color='black',
                    linestyle=':',
                    linewidth=1.5,
                    label='TDM Baseline',
                    alpha=0.6)
             
-            # Shade synergistic gain region (with proper interpolation)
-            # Ensure monotonic x for interpolation
-            sensing_scaled = sensing * 1e3
-            if len(sensing_scaled) > 1 and sensing_scaled[-1] > sensing_scaled[0]:
-                comm_tdm_interp = np.interp(sensing_scaled, sensing_tdm * 1e3, comm_tdm)
-                ax.fill_between(sensing_scaled, comm, comm_tdm_interp,
-                               where=(comm >= comm_tdm_interp),
-                               color='blue', alpha=0.1,
-                               label='Synergistic Gain')
+            # Shade synergistic gain region with proper monotonic interpolation
+            if len(sensing) > 1:
+                # Ensure monotonic ordering for interpolation
+                idx_sort = np.argsort(sensing)
+                s_sorted = sensing[idx_sort]
+                r_sorted = comm[idx_sort]
+                
+                # Interpolate TDM line to Pareto points
+                if s_sorted[-1] > s_sorted[0]:  # Check monotonicity
+                    comm_tdm_interp = np.interp(s_sorted, sensing_tdm, comm_tdm)
+                    ax.fill_between(s_sorted, r_sorted, comm_tdm_interp,
+                                   where=(r_sorted >= comm_tdm_interp),
+                                   color='blue', alpha=0.1,
+                                   label='Synergistic Gain')
     
     # Calculate and display synergistic gains
     print("\n" + "=" * 60)
@@ -465,7 +490,7 @@ def plot_pareto_boundaries():
                 print(f"{name:20s}: {gain:+.1f}% gain over TDM")
     
     # Formatting
-    ax.set_xlabel('Sensing Precision $P_S$ (1/CRLB) [×10⁻³]', fontsize=12)
+    ax.set_xlabel('Sensing Precision $P_S$ (1/CRLB)', fontsize=12)
     ax.set_ylabel('Communication Capacity $R_C$ [Mbps]', fontsize=12)
     ax.set_title('Pareto Optimal Boundaries for Mars ISAC System\n' + 
                  'UHF Proximity Link (435 MHz, 10 MHz BW, 10 W, 400 km)',
@@ -482,9 +507,9 @@ def plot_pareto_boundaries():
     # Add text box with key insights
     textstr = 'Key Insights:\n'
     textstr += '• Joint design outperforms TDM\n'
-    textstr += '• Dust storms affect both functions\n'
-    textstr += '• Scintillation impacts capacity more\n'
-    textstr += '• Realistic rates: ~10-80 Mbps'
+    textstr += '• UHF: dust impact negligible (Rayleigh regime)\n'
+    textstr += '• Scintillation impacts capacity significantly\n'
+    textstr += '• Realistic UHF rates: 20-80 Mbps'
     ax.text(0.02, 0.98, textstr, transform=ax.transAxes, fontsize=9,
             verticalalignment='top',
             bbox=dict(boxstyle='round', facecolor='wheat', alpha=0.8))
