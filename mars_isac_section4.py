@@ -334,7 +334,7 @@ def plot_single_band(link_type, save_name):
     })
     
     # Create figure
-    fig, ax = plt.subplots(figsize=(8, 6))
+    fig, ax = plt.subplots(figsize=(7, 5))
     
     # Initialize system
     system = MarsISACSystem(link_type=link_type)
