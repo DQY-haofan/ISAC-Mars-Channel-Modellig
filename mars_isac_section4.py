@@ -518,7 +518,7 @@ def plot_pareto_boundaries_dual_band():
                     print(f"  {name:20s}: {gain:+.1f}%")
         
         # Format subplot
-        ax.set_xlabel('Normalized Sensing Precision $\\bar{P}_S
+        ax.set_xlabel('Normalized Sensing Precision $\\bar{P}_S$', fontsize=11)
 
 def plot_resource_allocation_heatmap():
     """
