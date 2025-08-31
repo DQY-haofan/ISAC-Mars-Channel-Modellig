@@ -558,7 +558,7 @@ def plot_pareto_boundaries_dual_band():
                     print(f"  {name:20s}: {gain:+.1f}%")
         
         # Format subplot
-        ax.set_xlabel(r'Normalized Sensing Precision $\bar{P}_S = P_S/P_{S,\text{max}}^{\text{(baseline)}}
+        ax.set_xlabel(r'Normalized Sensing Precision $\bar{P}_S = P_S/P_{S,\text{max}}^{\text{(baseline)}$')
     
     # Overall title
     fig.suptitle('Frequency-Dependent Environmental Impact on Mars ISAC Performance',
