@@ -324,11 +324,11 @@ def plot_single_band(link_type, save_name):
     # Set large fonts for publication
     plt.rcParams.update({
         'font.size': 24,
-        'axes.labelsize': 24,
-        'axes.titlesize': 24,
+        'axes.labelsize': 22,
+        'axes.titlesize': 26,
         'legend.fontsize': 22,
-        'xtick.labelsize': 22,
-        'ytick.labelsize': 22,
+        'xtick.labelsize': 24,
+        'ytick.labelsize': 24,
         'lines.linewidth': 3,
         'lines.markersize': 8
     })
