@@ -323,14 +323,19 @@ def plot_single_band(link_type, save_name):
     """
     # Set large fonts for publication
     plt.rcParams.update({
-        'font.size': 24,
-        'axes.labelsize': 26,
-        'axes.titlesize': 26,
-        'legend.fontsize': 22,
-        'xtick.labelsize': 22,
-        'ytick.labelsize': 22,
-        'lines.linewidth': 3,
-        'lines.markersize': 8
+        'font.size': 22,           # Base font size
+        'axes.labelsize': 24,      # Matches xlabel/ylabel fontsize=24
+        'axes.titlesize': 24,      # Matches title fontsize=24
+        'axes.titleweight': 'bold', # Matches fontweight='bold' for title
+        'legend.fontsize': 22,      # Matches legend fontsize=22
+        'xtick.labelsize': 22,      # Keep tick labels slightly smaller
+        'ytick.labelsize': 22,      # Keep tick labels slightly smaller
+        'lines.linewidth': 3,       # Matches linewidth=3
+        'lines.markersize': 8,      # Keep as is
+        'figure.figsize': (9, 7),   # Matches figsize=(9, 7)
+        'axes.grid': True,          # Matches grid(True)
+        'grid.linestyle': ':',      # Matches linestyle=':'
+        'grid.alpha': 0.3          # Matches alpha=0.3 for grid
     })
     
     # Create figure
