@@ -122,6 +122,7 @@ class MarsISACSystem:
         self.H_dust = 11e3    # Dust scale height [m]
         self.beta_ext = 0.012 # Mass extinction efficiency [m²/g]
         
+    # Add Ka-band specific dust scaling
     def dust_extinction_scale(self):
         """
         Calculate frequency-dependent dust extinction scaling factor.
@@ -136,8 +137,10 @@ class MarsISACSystem:
             return 1e-6         # Near-zero but non-zero for numerical stability
         elif f_GHz < 10.0:      # L/S/C/X bands
             return 1e-3
-        elif f_GHz < 100.0:     # Ku/Ka/W bands - Mie scattering becomes significant
-            return 5e-2
+        elif f_GHz < 40.0:      # Ku/Ka bands - Mie scattering becomes significant
+            return 5e-2         # Ka-band experiences moderate dust impact
+        elif f_GHz < 100.0:     # W/V bands
+            return 0.2
         else:                   # Optical/FSO - full extinction
             return 1.0
     
@@ -415,18 +418,19 @@ def compute_tdm_baseline(system, tau_vis, S4):
 # Visualization
 # ============================================================================
 
-def plot_pareto_boundaries():
+def plot_pareto_boundaries_dual_band():
     """
-    Generate the main Pareto boundary comparison figure.
+    Generate dual-band Pareto boundary comparison figure.
+    Shows UHF (dust-immune) and Ka-band (dust-sensitive) side by side.
     """
     print("=" * 80)
-    print("Mars ISAC System - Pareto Optimal Boundaries Analysis")
+    print("Mars ISAC System - Dual-Band Pareto Boundaries Analysis")
     print("=" * 80)
     
-    # Initialize system (UHF proximity link)
-    system = MarsISACSystem(link_type='uhf')
+    # Create figure with two subplots
+    fig, (ax1, ax2) = plt.subplots(1, 2, figsize=(16, 7))
     
-    # Environmental scenarios
+    # Environmental scenarios (same for both bands)
     scenarios = [
         {'name': 'Baseline', 'tau_vis': 0.2, 'S4': 0.2, 
          'color': 'blue', 'linestyle': '-', 'marker': 'o'},
@@ -436,118 +440,269 @@ def plot_pareto_boundaries():
          'color': 'green', 'linestyle': '-.', 'marker': '^'},
     ]
     
+    # Process each band
+    for band_idx, (ax, link_type) in enumerate([(ax1, 'uhf'), (ax2, 'ka')]):
+        system = MarsISACSystem(link_type=link_type)
+        
+        # For Ka-band, use same distance as UHF for fair comparison
+        if link_type == 'ka':
+            system.d = 400e3  # 400 km proximity link
+            system.P_total = 20  # Higher power for Ka
+        
+        band_name = 'UHF (435 MHz)' if link_type == 'uhf' else 'Ka-band (32 GHz)'
+        print(f"\n{band_name} Analysis:")
+        print("-" * 40)
+        
+        boundaries = {}
+        
+        for scenario in scenarios:
+            print(f"Computing {scenario['name']}...")
+            print(f"  τ_vis = {scenario['tau_vis']}, S4 = {scenario['S4']}")
+            
+            # Compute Pareto boundary
+            sensing, comm = compute_pareto_boundary(
+                system, scenario['tau_vis'], scenario['S4'], num_grid=101
+            )
+            
+            # Sort and create envelope
+            idx_sort = np.argsort(sensing)
+            s_sorted = sensing[idx_sort]
+            r_sorted = comm[idx_sort]
+            r_envelope = np.maximum.accumulate(r_sorted[::-1])[::-1]
+            
+            boundaries[scenario['name']] = (s_sorted, r_envelope)
+            
+            # Normalize sensing for better visualization
+            s_norm = s_sorted / np.max(s_sorted) if np.max(s_sorted) > 0 else s_sorted
+            
+            # Plot Pareto curve
+            ax.plot(s_norm, r_envelope,
+                   color=scenario['color'],
+                   linestyle=scenario['linestyle'],
+                   linewidth=2.5,
+                   marker=scenario['marker'],
+                   markevery=max(1, len(s_norm)//10),
+                   markersize=6,
+                   label=f"{scenario['name']}",
+                   alpha=0.8)
+            
+            # Add TDM baseline for first scenario
+            if scenario['name'] == 'Baseline':
+                sensing_tdm, comm_tdm = compute_tdm_baseline(
+                    system, scenario['tau_vis'], scenario['S4']
+                )
+                s_tdm_norm = sensing_tdm / np.max(sensing_tdm) if np.max(sensing_tdm) > 0 else sensing_tdm
+                
+                ax.plot(s_tdm_norm, comm_tdm,
+                       color='black',
+                       linestyle=':',
+                       linewidth=1.5,
+                       label='TDM Baseline',
+                       alpha=0.6)
+                
+                # Shade synergistic gain
+                if len(s_norm) > 1:
+                    comm_tdm_interp = np.interp(s_norm, s_tdm_norm, comm_tdm)
+                    ax.fill_between(s_norm, r_envelope, comm_tdm_interp,
+                                   where=(r_envelope >= comm_tdm_interp),
+                                   color='blue', alpha=0.1)
+        
+        # Calculate synergistic gains
+        print(f"\nSynergistic Gains for {band_name}:")
+        for name, (s, r) in boundaries.items():
+            if len(s) > 1 and np.max(s) > 0:
+                area_pareto = np.trapz(r, s)
+                area_tdm = 0.5 * np.max(s) * np.max(r)
+                if area_tdm > 0:
+                    gain = (area_pareto / area_tdm - 1) * 100
+                    print(f"  {name:20s}: {gain:+.1f}%")
+        
+        # Format subplot
+        ax.set_xlabel('Normalized Sensing Precision $\\bar{P}_S
+
+def plot_resource_allocation_heatmap():
+    """
+    Generate heatmap showing optimal resource allocation with proper normalization.
+    """
+    print("\nGenerating Resource Allocation Heatmap...")
+    
+    # Initialize system
+    system = MarsISACSystem(link_type='uhf')
+    
+    # Parameter ranges
+    rho_range = np.linspace(0, 1, 41)
+    beta_range = np.linspace(0, 1, 41)
+    
+    # Baseline environmental conditions
+    tau_vis = 0.2
+    S4 = 0.2
+    
+    # Calculate performance metrics
+    RHO, BETA = np.meshgrid(rho_range, beta_range)
+    
+    # Storage for individual metrics
+    PRECISION = np.zeros_like(RHO)
+    CAPACITY = np.zeros_like(RHO)
+    
+    for i in range(len(beta_range)):
+        for j in range(len(rho_range)):
+            PRECISION[i,j] = system.sensing_precision(RHO[i,j], BETA[i,j], tau_vis, S4)
+            CAPACITY[i,j] = system.ergodic_capacity_nakagami(RHO[i,j], BETA[i,j], tau_vis, S4)
+    
+    # Normalize by maximum values
+    P_max = np.max(PRECISION)
+    C_max = np.max(CAPACITY)
+    
+    # Combined utility using geometric mean (avoids linear flatness)
+    w_s = 0.5  # Weight for sensing
+    w_c = 0.5  # Weight for communication
+    eps = 1e-12  # Small constant for numerical stability
+    
+    # Geometric mean provides better interior optimum
+    UTILITY = np.exp(w_s * np.log(PRECISION/P_max + eps) + 
+                     w_c * np.log(CAPACITY/C_max + eps))
+    
     # Create figure
-    fig, ax = plt.subplots(figsize=(10, 8))
+    fig, (ax1, ax2) = plt.subplots(1, 2, figsize=(14, 6))
     
-    # Store boundaries for synergistic gain calculation
-    boundaries = {}
+    # Left panel: Utility heatmap
+    im1 = ax1.pcolormesh(RHO, BETA, UTILITY, cmap='viridis', shading='auto')
     
-    # Plot Pareto boundaries for each scenario
-    for scenario in scenarios:
-        print(f"\nComputing {scenario['name']} scenario...")
-        print(f"  τ_vis = {scenario['tau_vis']}, S4 = {scenario['S4']}")
-        
-        # Compute true Pareto boundary
-        sensing, comm = compute_pareto_boundary(
-            system, scenario['tau_vis'], scenario['S4'], num_grid=101
-        )
-        
-        # Sort by sensing precision (ascending)
-        idx_sort = np.argsort(sensing)
-        s_sorted = sensing[idx_sort]
-        r_sorted = comm[idx_sort]
-        
-        # Create monotonic non-increasing upper envelope
-        # Reverse accumulate: for each s, take max of all s' >= s
-        r_envelope = np.maximum.accumulate(r_sorted[::-1])[::-1]
-        
-        # Store for analysis
-        boundaries[scenario['name']] = (s_sorted, r_envelope)
-        
-        # Print actual performance values
-        print(f"  Max sensing precision: {np.max(s_sorted):.2e}")
-        print(f"  Max communication rate: {np.max(r_envelope):.2f} Mbps")
-        
-        # Plot Pareto curve (smooth envelope)
-        ax.plot(s_sorted, r_envelope,  # Use corrected envelope
-                color=scenario['color'],
-                linestyle=scenario['linestyle'],
-                linewidth=2.5,
-                marker=scenario['marker'],
-                markevery=max(1, len(s_sorted)//10),
-                markersize=6,
-                label=f"{scenario['name']} (τ={scenario['tau_vis']}, S₄={scenario['S4']})",
-                alpha=0.8)
-        
-        # Compute and plot TDM baseline
-        sensing_tdm, comm_tdm = compute_tdm_baseline(
-            system, scenario['tau_vis'], scenario['S4']
-        )
-        
-        if scenario['name'] == 'Baseline':
-            ax.plot(sensing_tdm, comm_tdm,
-                   color='black',
-                   linestyle=':',
-                   linewidth=1.5,
-                   label='TDM Baseline',
-                   alpha=0.6)
-            
-            # Shade synergistic gain region with proper monotonic interpolation
-            if len(s_sorted) > 1:
-                # s_sorted is already monotonic from the sorting above
-                # Interpolate TDM line to Pareto points
-                comm_tdm_interp = np.interp(s_sorted, sensing_tdm, comm_tdm)
-                ax.fill_between(s_sorted, r_envelope, comm_tdm_interp,
-                               where=(r_envelope >= comm_tdm_interp),
-                               color='blue', alpha=0.1,
-                               label='Synergistic Gain')
+    # Find optimal point
+    max_idx = np.unravel_index(np.argmax(UTILITY), UTILITY.shape)
+    opt_rho = RHO[max_idx]
+    opt_beta = BETA[max_idx]
     
-    # Calculate and display synergistic gains
-    print("\n" + "=" * 60)
-    print("Synergistic Gain Analysis")
-    print("=" * 60)
+    # Mark optimal point
+    ax1.plot(opt_rho, opt_beta, 'r*', markersize=15, 
+             label=f'Optimal: ρ={opt_rho:.2f}, β={opt_beta:.2f}')
     
-    for name, (sensing, comm) in boundaries.items():
-        # Approximate area under curve
-        if len(sensing) > 1:
-            area_pareto = np.trapz(comm, sensing)
-            
-            # TDM area (triangle)
-            max_sensing = np.max(sensing)
-            max_comm = np.max(comm)
-            area_tdm = 0.5 * max_sensing * max_comm
-            
-            if area_tdm > 0:
-                gain = (area_pareto / area_tdm - 1) * 100
-                print(f"{name:20s}: {gain:+.1f}% gain over TDM")
+    # Add contour lines
+    CS1 = ax1.contour(RHO, BETA, UTILITY, levels=10, colors='white', 
+                      linewidths=0.5, alpha=0.5)
     
-    # Formatting
-    ax.set_xlabel('Sensing Precision $P_S$ (1/CRLB)', fontsize=12)
-    ax.set_ylabel('Communication Capacity $R_C$ [Mbps]', fontsize=12)
-    ax.set_title('Pareto Optimal Boundaries for Mars ISAC System\n' + 
-                 'UHF Proximity Link (435 MHz, 10 MHz BW, 10 W, 400 km)',
-                 fontsize=13, fontweight='bold')
+    # Labels and formatting
+    ax1.set_xlabel('Power Allocation Factor ρ (Sensing)', fontsize=11)
+    ax1.set_ylabel('Resource Block Allocation Factor β (Sensing)', fontsize=11)
+    ax1.set_title('Joint Resource Allocation (Equal Weights)',
+                  fontsize=12, fontweight='bold')
+    ax1.legend(loc='best', fontsize=10)
     
-    # Grid and legend
-    ax.grid(True, linestyle=':', alpha=0.3)
-    ax.legend(loc='upper right', fontsize=10, frameon=True, shadow=True)
+    # Colorbar for utility
+    cbar1 = plt.colorbar(im1, ax=ax1)
+    cbar1.set_label('Normalized Combined Utility', fontsize=10)
     
-    # Set axis limits for better visualization
-    ax.set_xlim([0, None])
-    ax.set_ylim([0, None])
+    # Right panel: Individual metrics contours (normalized)
+    # Plot normalized sensing precision contours
+    CS2 = ax2.contour(RHO, BETA, PRECISION/P_max, levels=8, colors='blue', 
+                      linewidths=1.5, alpha=0.7)
+    ax2.clabel(CS2, inline=True, fontsize=8, fmt='P=%.2f')
     
-    # Add text box with key insights
-    textstr = 'Key Insights:\n'
-    textstr += '• Joint design outperforms TDM\n'
-    textstr += '• UHF: dust impact negligible (Rayleigh regime)\n'
-    textstr += '• Scintillation impacts capacity significantly\n'
-    textstr += '• Realistic UHF rates: 20-80 Mbps'
-    ax.text(0.02, 0.98, textstr, transform=ax.transAxes, fontsize=9,
-            verticalalignment='top',
-            bbox=dict(boxstyle='round', facecolor='wheat', alpha=0.8))
+    # Plot normalized communication capacity contours  
+    CS3 = ax2.contour(RHO, BETA, CAPACITY/C_max, levels=8, colors='red', 
+                      linewidths=1.5, alpha=0.7)
+    ax2.clabel(CS3, inline=True, fontsize=8, fmt='R=%.2f')
+    
+    # Mark optimal point
+    ax2.plot(opt_rho, opt_beta, 'g*', markersize=15, label='Optimal Point')
+    
+    # Labels and formatting
+    ax2.set_xlabel('Power Allocation Factor ρ (Sensing)', fontsize=11)
+    ax2.set_ylabel('Resource Block Allocation Factor β (Sensing)', fontsize=11)
+    ax2.set_title('Performance Contours (Blue: Sensing, Red: Comm)',
+                  fontsize=12, fontweight='bold')
+    ax2.legend(loc='best', fontsize=10)
+    ax2.grid(True, linestyle=':', alpha=0.3)
     
     plt.tight_layout()
     return fig
+
+# ============================================================================
+# Main Execution
+# ============================================================================
+
+def main():
+    """
+    Main function to run complete analysis.
+    """
+    import os
+    
+    # Create results directory
+    os.makedirs('results', exist_ok=True)
+    print("✅ Created/verified 'results' directory")
+    
+    # Generate main Pareto boundaries figure
+    fig1 = plot_pareto_boundaries()
+    fig1.savefig('results/fig4_1_pareto_boundaries_corrected.pdf', format='pdf', dpi=300)
+    fig1.savefig('results/fig4_1_pareto_boundaries_corrected.png', format='png', dpi=300)
+    print("\n✅ Saved: results/fig4_1_pareto_boundaries_corrected.pdf/png")
+    
+    # Generate resource allocation heatmap
+    fig2 = plot_resource_allocation_heatmap()
+    fig2.savefig('results/fig4_2_resource_allocation_corrected.pdf', format='pdf', dpi=300)
+    fig2.savefig('results/fig4_2_resource_allocation_corrected.png', format='png', dpi=300)
+    print("✅ Saved: results/fig4_2_resource_allocation_corrected.pdf/png")
+    
+    # Display figures
+    plt.show()
+    
+    # Print summary
+    print("\n" + "=" * 80)
+    print("ANALYSIS COMPLETE (CORRECTED VERSION)!")
+    print("=" * 80)
+    print("\n📊 Generated Figures:")
+    print("  1. Pareto Optimal Boundaries (Corrected)")
+    print("     - Proper link budget with FSPL and antenna gains")
+    print("     - Correct Nakagami-m capacity calculation")
+    print("     - True Pareto frontier via non-dominated sorting")
+    print("     - Realistic capacity values (~10-80 Mbps)")
+    print("\n  2. Resource Allocation Heatmap (Corrected)")
+    print("     - Normalized utility function")
+    print("     - Interior optimal point")
+    print("     - Individual performance contours")
+    print("\n📝 All results saved in 'results/' directory")
+    print("\n✨ Key corrections made:")
+    print("   • Fixed average SNR calculation (no division by m)")
+    print("   • Corrected Nakagami PDF integration")
+    print("   • Implemented SNR² dependence for dust sensing")
+    print("   • Added proper non-dominated sorting for Pareto frontier")
+    print("   • Normalized utility metrics for meaningful optimization")
+
+if __name__ == "__main__":
+    main(), fontsize=11)
+        ax.set_ylabel('Communication Capacity $R_C$ [Mbps]', fontsize=11)
+        ax.set_title(f'{band_name} Pareto Boundaries', fontsize=12, fontweight='bold')
+        ax.grid(True, linestyle=':', alpha=0.3)
+        ax.legend(loc='upper right', fontsize=9, frameon=True, shadow=True)
+        ax.set_xlim([0, 1.05])
+        ax.set_ylim([0, None])
+        
+        # Add band-specific annotations
+        if link_type == 'uhf':
+            ax.text(0.02, 0.98, 
+                   'UHF: Dust-immune\n(Rayleigh regime)\nNear-linear tradeoff\nat high SNR',
+                   transform=ax.transAxes, fontsize=8,
+                   verticalalignment='top',
+                   bbox=dict(boxstyle='round', facecolor='wheat', alpha=0.8))
+        else:
+            ax.text(0.02, 0.98,
+                   'Ka: Dust-sensitive\n(Mie scattering)\nLarger synergistic\ngains possible',
+                   transform=ax.transAxes, fontsize=8,
+                   verticalalignment='top',
+                   bbox=dict(boxstyle='round', facecolor='lightblue', alpha=0.8))
+    
+    # Overall title
+    fig.suptitle('Frequency-Dependent Environmental Impact on Mars ISAC Performance',
+                fontsize=13, fontweight='bold', y=1.02)
+    
+    plt.tight_layout()
+    return fig
+
+def plot_pareto_boundaries():
+    """
+    Wrapper function that calls the dual-band version.
+    """
+    return plot_pareto_boundaries_dual_band()
 
 def plot_resource_allocation_heatmap():
     """
