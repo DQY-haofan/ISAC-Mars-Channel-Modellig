@@ -87,7 +87,7 @@ class MarsISACSystem:
             # UHF Proximity Link (Orbiter-Rover) - Table I parameters
             self.f_c = 435e6      # 435 MHz carrier frequency
             self.B = 10e6         # 10 MHz bandwidth
-            self.P_total = 10     # 10 W transmit power
+            self.P_total = 5      # 5 W transmit power (reduced for non-saturation)
             self.d = 400e3        # 400 km link distance
             self.F_dB = 3         # 3 dB noise figure
             self.G_t_dBi = 10     # Transmit antenna gain [dBi]
@@ -96,7 +96,7 @@ class MarsISACSystem:
             # Ka-band Deep Space Link
             self.f_c = 32e9       # 32 GHz carrier frequency
             self.B = 50e6         # 50 MHz bandwidth
-            self.P_total = 50     # 50 W transmit power
+            self.P_total = 15     # 15 W transmit power (reduced for better curvature)
             self.d = 400e3        # 400 km for proximity (overridden in dual-band plot)
             self.F_dB = 3         # 3 dB noise figure
             self.G_t_dBi = 45     # High-gain antenna [dBi]
@@ -122,6 +122,10 @@ class MarsISACSystem:
         # Mars atmospheric parameters
         self.H_dust = 11e3    # Dust scale height [m]
         self.beta_ext = 0.012 # Mass extinction efficiency [m²/g]
+        
+        # Pilot reuse efficiency parameters
+        self.psi = 0.05       # Fixed pilot/reference overhead (5%)
+        self.xi = 0.2         # Reuse efficiency: 0=perfect reuse, 1=TDM-like
         
     def dust_extinction_scale(self):
         """
@@ -206,7 +210,7 @@ class MarsISACSystem:
     
     def ergodic_capacity_nakagami(self, rho, beta, tau_vis, S4):
         """
-        Calculate ergodic capacity under Nakagami-m fading.
+        Calculate ergodic capacity under Nakagami-m fading with pilot reuse.
         
         Args:
             rho: Power allocation factor for sensing
@@ -238,14 +242,16 @@ class MarsISACSystem:
             
             capacity_bps_hz, _ = quad(integrand, 0, np.inf, limit=200)
         
-        # Account for resource allocation to communication
-        capacity_bps = (1 - beta) * self.B * capacity_bps_hz
+        # Account for pilot reuse efficiency in joint design
+        # eff_comm = 1 - psi - xi*beta, where xi<1 enables pilot reuse
+        eff_comm_fraction = max(0.0, 1.0 - self.psi - self.xi * beta)
+        capacity_bps = eff_comm_fraction * self.B * capacity_bps_hz
         
         return capacity_bps
     
     def sensing_precision(self, rho, beta, tau_vis, S4, target='dust'):
         """
-        Calculate sensing precision (1/CRLB) for environmental parameters.
+        Calculate sensing precision (1/CRLB) with pilot reuse benefit.
         
         Args:
             rho: Power allocation factor for sensing
@@ -270,8 +276,9 @@ class MarsISACSystem:
         # SNR for sensing (with antenna gains)
         snr_sense = (P_sense * self.G_t * self.G_r / L_fs) * atten / (self.N_0 * self.B)
         
-        # Effective samples for sensing
-        N_eff_sense = beta * self.B * self.T / self.kappa
+        # Effective samples for sensing (includes pilot reuse)
+        # Sensing can use both fixed pilots and allocated resources
+        N_eff_sense = (self.psi + beta) * self.B * self.T / self.kappa
         
         if target == 'dust':
             # Fisher information for dust optical depth
@@ -338,9 +345,11 @@ def compute_pareto_boundary_scalarized(system, tau_vis, S4, num_weights=101):
     frontier_r = []
     
     for lam in lambdas:
-        # Scalarized objective
+        # Scalarized objective using geometric mean for better balance
         if P_max > 0 and C_max > 0:
-            J = lam * (CAPACITY / C_max) + (1 - lam) * (PRECISION / P_max)
+            # Geometric mean avoids linear bias
+            J = np.exp(lam * np.log(CAPACITY / C_max + 1e-12) + 
+                      (1 - lam) * np.log(PRECISION / P_max + 1e-12))
         else:
             J = CAPACITY if lam > 0.5 else PRECISION
             
@@ -427,13 +436,14 @@ def plot_pareto_boundaries_dual_band():
         # For Ka-band, use same distance as UHF for fair comparison
         if link_type == 'ka':
             system.d = 400e3  # 400 km proximity link
-            system.P_total = 20  # Higher power for Ka
+            # Power is already set appropriately in __init__
         
         band_name = 'UHF (435 MHz)' if link_type == 'uhf' else 'Ka-band (32 GHz)'
         print(f"\n{band_name} Analysis:")
         print("-" * 40)
         
         boundaries = {}
+        P_ref = None  # Unified reference for normalization
         
         for scenario in scenarios:
             print(f"Computing {scenario['name']}...")
@@ -452,16 +462,20 @@ def plot_pareto_boundaries_dual_band():
             
             boundaries[scenario['name']] = (s_sorted, r_envelope)
             
-            # Normalize sensing for better visualization
-            s_norm = s_sorted / np.max(s_sorted) if np.max(s_sorted) > 0 else s_sorted
+            # Set reference from baseline scenario
+            if scenario['name'] == 'Baseline' and P_ref is None:
+                P_ref = np.max(s_sorted) if np.max(s_sorted) > 0 else 1.0
+            
+            # Use unified normalization (not per-scenario)
+            s_plot = s_sorted / P_ref if P_ref > 0 else s_sorted
             
             # Plot Pareto curve
-            ax.plot(s_norm, r_envelope,
+            ax.plot(s_plot, r_envelope,
                    color=scenario['color'],
                    linestyle=scenario['linestyle'],
                    linewidth=2.5,
                    marker=scenario['marker'],
-                   markevery=max(1, len(s_norm)//10),
+                   markevery=max(1, len(s_plot)//10),
                    markersize=6,
                    label=f"{scenario['name']}",
                    alpha=0.8)
@@ -471,9 +485,10 @@ def plot_pareto_boundaries_dual_band():
                 sensing_tdm, comm_tdm = compute_tdm_baseline(
                     system, scenario['tau_vis'], scenario['S4']
                 )
-                s_tdm_norm = sensing_tdm / np.max(sensing_tdm) if np.max(sensing_tdm) > 0 else sensing_tdm
+                # Use same P_ref for TDM
+                s_tdm_plot = sensing_tdm / P_ref if P_ref > 0 else sensing_tdm
                 
-                ax.plot(s_tdm_norm, comm_tdm,
+                ax.plot(s_tdm_plot, comm_tdm,
                        color='black',
                        linestyle=':',
                        linewidth=1.5,
@@ -481,9 +496,9 @@ def plot_pareto_boundaries_dual_band():
                        alpha=0.6)
                 
                 # Shade synergistic gain
-                if len(s_norm) > 1:
-                    comm_tdm_interp = np.interp(s_norm, s_tdm_norm, comm_tdm)
-                    ax.fill_between(s_norm, r_envelope, comm_tdm_interp,
+                if len(s_plot) > 1:
+                    comm_tdm_interp = np.interp(s_plot, s_tdm_plot, comm_tdm)
+                    ax.fill_between(s_plot, r_envelope, comm_tdm_interp,
                                    where=(r_envelope >= comm_tdm_interp),
                                    color='blue', alpha=0.1)
         
