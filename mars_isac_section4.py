@@ -325,7 +325,7 @@ def plot_single_band(link_type, save_name):
     plt.rcParams.update({
         'font.size': 22,
         'axes.labelsize': 24,
-        'axes.titlesize': 22,
+        'axes.titlesize': 24,
         'legend.fontsize': 22,
         'xtick.labelsize': 22,
         'ytick.labelsize': 22,
